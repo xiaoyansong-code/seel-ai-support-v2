@@ -3,6 +3,8 @@ import { agents as defaultAgents, rules as defaultRules, topics as defaultTopics
 
 type MainTab = "agents" | "playbook" | "performance";
 type AgentMode = "onboarding" | "normal";
+/** Which area the onboarding chat is showing: team-lead or rep */
+type OnboardingArea = "team-lead" | "rep";
 
 interface AppState {
   // Navigation
@@ -19,6 +21,12 @@ interface AppState {
   advanceOnboarding: () => void;
   onboardingComplete: boolean;
   setOnboardingComplete: (v: boolean) => void;
+  onboardingArea: OnboardingArea;
+  setOnboardingArea: (area: OnboardingArea) => void;
+
+  // Hired rep name (set during onboarding hire flow)
+  hiredRepName: string;
+  setHiredRepName: (name: string) => void;
 
   // Agent selection
   selectedAgentId: string;
@@ -52,6 +60,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [onboardingStep, setOnboardingStep] = useState(1);
   const [selectedAgentId, setSelectedAgentId] = useState("team-lead");
   const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [onboardingArea, setOnboardingArea] = useState<OnboardingArea>("team-lead");
+  const [hiredRepName, setHiredRepName] = useState("Ava");
 
   // Mutable data
   const [agentsData, setAgentsData] = useState<Agent[]>(defaultAgents);
@@ -115,6 +125,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setSelectedAgentId,
         onboardingComplete,
         setOnboardingComplete,
+        onboardingArea,
+        setOnboardingArea,
+        hiredRepName,
+        setHiredRepName,
         agentsData,
         updateAgent,
         rulesData,
