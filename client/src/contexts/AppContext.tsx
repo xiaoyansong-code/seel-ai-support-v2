@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import React, { createContext, useContext, useState, useCallback, useMemo, type ReactNode } from "react";
 import {
   agents as defaultAgents,
   rules as defaultRules,
@@ -15,8 +15,6 @@ import {
 
 /* ── Navigation ── */
 type MainTab = "agents" | "playbook" | "performance";
-type AgentMode = "setup" | "normal";
-type StepStatus = "pending" | "complete" | "skipped";
 type GoLiveMode = "training" | "production" | "off";
 
 /* ── Zendesk sub-step state machine ── */
@@ -43,36 +41,31 @@ interface ChannelConfig {
   sms: boolean;
 }
 
-/* Handoff is now per-channel. For MVP we only have email channel handoff. */
 interface HandoffConfig {
-  /* Assign to Group */
   selectedGroup: string;
   availableGroups: string[];
-  /* Assign to Person */
   selectedHandoffSeat: string;
   availableHandoffSeats: { id: string; name: string; email: string }[];
-  /* Add Tag */
   handoffTag: string;
   autoSetPriority: boolean;
-  /* Priority */
   priority: "normal" | "high" | "urgent";
 }
+
+/* ── Setup Progress step status ── */
+type SetupStepStatus = "pending" | "complete" | "locked";
 
 /* ── Context shape ── */
 interface AppState {
   mainTab: MainTab;
   setMainTab: (tab: MainTab) => void;
 
-  agentMode: AgentMode;
-  setAgentMode: (mode: AgentMode) => void;
-
-  /* 3-step wizard */
-  setupStep: number;
-  setSetupStep: (step: number) => void;
-  setupComplete: boolean;
-  setSetupComplete: (v: boolean) => void;
-  stepStatuses: Record<number, StepStatus>;
-  setStepStatus: (step: number, status: StepStatus) => void;
+  /* Setup Progress — 4 steps */
+  setupFullyComplete: boolean;
+  step1Complete: boolean; // Ticketing System connected
+  step2Complete: boolean; // At least one doc processed with rules
+  step3Complete: boolean; // Rep hired (name + personality set)
+  step4Complete: boolean; // Go Live mode set to training or production
+  step4Status: SetupStepStatus; // locked if 1-3 not all done
 
   /* Zendesk state machine */
   zendesk: ZendeskState;
@@ -98,8 +91,8 @@ interface AppState {
   setRepHired: (v: boolean) => void;
   hiredRepName: string;
   setHiredRepName: (name: string) => void;
-  repPersonality: "Friendly" | "Professional" | "Casual" | "Customize";
-  setRepPersonality: (p: "Friendly" | "Professional" | "Casual" | "Customize") => void;
+  repPersonality: "Friendly" | "Professional" | "Casual" | "Customize" | "";
+  setRepPersonality: (p: "Friendly" | "Professional" | "Casual" | "Customize" | "") => void;
   repCustomTone: string;
   setRepCustomTone: (t: string) => void;
   repPermissions: ActionPermission[];
@@ -107,27 +100,33 @@ interface AppState {
   goLiveMode: GoLiveMode;
   setGoLiveMode: (m: GoLiveMode) => void;
 
-  /* New: Disclose AI identity */
+  /* Disclose AI identity */
   discloseAI: boolean;
   setDiscloseAI: (v: boolean) => void;
 
-  /* New: Email sign-off */
+  /* Email sign-off */
   emailSignoff: string;
   setEmailSignoff: (s: string) => void;
 
-  /* Settings/Setup unified view */
+  /* Settings overlay */
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
   settingsSection: string | null;
   setSettingsSection: (s: string | null) => void;
 
-  /* Agent selection (Normal mode) */
+  /* Agent selection */
   selectedAgentId: string;
   setSelectedAgentId: (id: string) => void;
 
-  /* Playbook deep-link: when set, switches to Playbook tab and opens this sub-tab */
+  /* Playbook deep-link */
   playbookDeepLink: string | null;
   setPlaybookDeepLink: (tab: string | null) => void;
+
+  /* Onboarding guide state — for Step 4 spotlight */
+  showGoLiveGuide: boolean;
+  setShowGoLiveGuide: (v: boolean) => void;
+  goLiveGuideShown: boolean; // has been shown once
+  setGoLiveGuideShown: (v: boolean) => void;
 
   /* Data collections */
   agentsData: Agent[];
@@ -137,18 +136,17 @@ interface AppState {
   toggleRule: (id: string) => void;
   topicsData: Topic[];
   updateTopic: (id: string, updates: Partial<Topic>) => void;
+  addTopic: (topic: Topic) => void;
   docsData: Document[];
   addDocument: (doc: Document) => void;
   removeDocument: (id: string) => void;
   toggleDocInUse: (id: string) => void;
-
-  /* Helpers */
-  incompleteItems: string[];
+  updateDocument: (id: string, updates: Partial<Document>) => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
 
-/* ── Default Zendesk state ── */
+/* ── Defaults ── */
 const defaultZendesk: ZendeskState = {
   subdomain: "",
   authStatus: "idle",
@@ -180,17 +178,6 @@ const defaultHandoff: HandoffConfig = {
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [mainTab, setMainTab] = useState<MainTab>("agents");
-  const [agentMode, setAgentMode] = useState<AgentMode>("setup");
-
-  const [setupStep, setSetupStep] = useState(1);
-  const [setupComplete, setSetupComplete] = useState(false);
-  const [stepStatuses, setStepStatuses] = useState<Record<number, StepStatus>>({
-    1: "pending", 2: "pending", 3: "pending",
-  });
-
-  const [selectedAgentId, setSelectedAgentId] = useState("team-lead");
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsSection, setSettingsSection] = useState<string | null>(null);
 
   /* Zendesk */
   const [zendesk, setZendeskRaw] = useState<ZendeskState>(defaultZendesk);
@@ -215,32 +202,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sopUploaded, setSopUploaded] = useState(false);
   const [extractedRuleNames, setExtractedRuleNames] = useState<string[]>([]);
 
-  /* Rep config */
+  /* Rep config — first time: name and personality are empty */
   const [repHired, setRepHired] = useState(false);
-  const [hiredRepName, setHiredRepName] = useState("Ava");
-  const [repPersonality, setRepPersonality] = useState<"Friendly" | "Professional" | "Casual" | "Customize">("Friendly");
+  const [hiredRepName, setHiredRepName] = useState("");
+  const [repPersonality, setRepPersonality] = useState<"Friendly" | "Professional" | "Casual" | "Customize" | "">("");
   const [repCustomTone, setRepCustomTone] = useState("");
   const [repPermissions, setRepPermissions] = useState<ActionPermission[]>([
     ...defaultReadActions, ...defaultWriteActions,
   ]);
   const [goLiveMode, setGoLiveMode] = useState<GoLiveMode>("off");
 
-  /* New states */
   const [discloseAI, setDiscloseAI] = useState(true);
   const [emailSignoff, setEmailSignoff] = useState("Best regards,\nThe Support Team");
 
+  /* Settings overlay */
+  const [showSettings, setShowSettings] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<string | null>(null);
+
+  /* Agent selection */
+  const [selectedAgentId, setSelectedAgentId] = useState("team-lead");
+
   /* Playbook deep-link */
   const [playbookDeepLink, setPlaybookDeepLink] = useState<string | null>(null);
+
+  /* Onboarding guide */
+  const [showGoLiveGuide, setShowGoLiveGuide] = useState(false);
+  const [goLiveGuideShown, setGoLiveGuideShown] = useState(false);
 
   /* Data */
   const [agentsData, setAgentsData] = useState<Agent[]>(defaultAgents);
   const [rulesData, setRulesData] = useState<Rule[]>(defaultRules);
   const [topicsData, setTopicsData] = useState<Topic[]>(defaultTopics);
   const [docsData, setDocsData] = useState<Document[]>(defaultDocs);
-
-  const setStepStatus = useCallback((step: number, status: StepStatus) => {
-    setStepStatuses((prev) => ({ ...prev, [step]: status }));
-  }, []);
 
   const updateAgent = useCallback((id: string, updates: Partial<Agent>) => {
     setAgentsData((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)));
@@ -254,6 +247,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateTopic = useCallback((id: string, updates: Partial<Topic>) => {
     setTopicsData((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   }, []);
+  const addTopic = useCallback((topic: Topic) => {
+    setTopicsData((prev) => [topic, ...prev]);
+  }, []);
   const addDocument = useCallback((doc: Document) => {
     setDocsData((prev) => [...prev, doc]);
   }, []);
@@ -263,20 +259,25 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const toggleDocInUse = useCallback((id: string) => {
     setDocsData((prev) => prev.map((d) => (d.id === id ? { ...d, inUse: !d.inUse } : d)));
   }, []);
+  const updateDocument = useCallback((id: string, updates: Partial<Document>) => {
+    setDocsData((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+  }, []);
 
-  /* Incomplete items for banner */
-  const incompleteItems: string[] = [];
-  if (!zendeskConnected && stepStatuses[1] === "skipped") incompleteItems.push("zendesk");
-  if (!sopUploaded && stepStatuses[2] === "skipped") incompleteItems.push("policies");
+  /* ── Setup Progress derived state ── */
+  const step1Complete = zendeskConnected;
+  const step2Complete = docsData.some((d) => d.status === "Processed" && d.extractedRules);
+  const step3Complete = repHired;
+  const step4Complete = goLiveMode !== "off";
+  const step4Status: SetupStepStatus = (step1Complete && step2Complete && step3Complete) ? (step4Complete ? "complete" : "pending") : "locked";
+  const setupFullyComplete = step1Complete && step2Complete && step3Complete && step4Complete;
 
   return (
     <AppContext.Provider
       value={{
         mainTab, setMainTab,
-        agentMode, setAgentMode,
-        setupStep, setSetupStep,
-        setupComplete, setSetupComplete,
-        stepStatuses, setStepStatus,
+        setupFullyComplete,
+        step1Complete, step2Complete, step3Complete, step4Complete,
+        step4Status,
         zendesk, setZendesk, zendeskConnected,
         channels, setChannels,
         handoff, setHandoff,
@@ -294,11 +295,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         settingsSection, setSettingsSection,
         selectedAgentId, setSelectedAgentId,
         playbookDeepLink, setPlaybookDeepLink,
+        showGoLiveGuide, setShowGoLiveGuide,
+        goLiveGuideShown, setGoLiveGuideShown,
         agentsData, updateAgent,
         rulesData, updateRule, toggleRule,
-        topicsData, updateTopic,
-        docsData, addDocument, removeDocument, toggleDocInUse,
-        incompleteItems,
+        topicsData, updateTopic, addTopic,
+        docsData, addDocument, removeDocument, toggleDocInUse, updateDocument,
       }}
     >
       {children}

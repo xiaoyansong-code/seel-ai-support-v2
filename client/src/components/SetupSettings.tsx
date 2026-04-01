@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useMemo } from "react";
+/*
+ * SetupSettings — Settings-only component (no wizard mode)
+ * Round 7: Pure settings view with two sections: Ticketing System + Configure Agent
+ *          Supports settingsSection deep-link for "ticketing" or "agent"
+ *          First-time config shows "Hire Rep" instead of "Save Changes"
+ *          Zendesk sub-steps: progressive disclosure (hide later steps if earlier not done)
+ */
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,11 +13,10 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
-  Check, AlertTriangle, ChevronRight, Loader2, RefreshCw,
-  Globe, Upload, FileText, Link2, Sparkles, Bot,
-  Shield, ArrowRight, ArrowLeft, ExternalLink, Mail,
-  MessageSquare, Smartphone, Tag, Users, UserCheck, AlertCircle, Info,
-  ChevronDown, HelpCircle, Eye, EyeOff, Plus, Pen,
+  Check, AlertTriangle, Loader2, RefreshCw,
+  Globe, Bot, Shield, ExternalLink, Mail,
+  MessageSquare, Smartphone, Tag, Users, UserCheck,
+  Info, ChevronDown, HelpCircle, Eye, EyeOff, Plus,
 } from "lucide-react";
 
 /* ================================================================
@@ -32,7 +38,7 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 /* ================================================================
-   PERSONALITY EXAMPLES — static sample messages per personality
+   PERSONALITY EXAMPLES
    ================================================================ */
 const PERSONALITY_EXAMPLES: Record<string, { description: string; sample: string }> = {
   Friendly: {
@@ -54,91 +60,12 @@ const PERSONALITY_EXAMPLES: Record<string, { description: string; sample: string
 };
 
 /* ================================================================
-   STEPPER — left rail
+   SECTION 1 — Ticketing System (Zendesk)
+   Progressive disclosure: hide later sub-steps if earlier not done
    ================================================================ */
-const WIZARD_STEPS = [
-  { id: 1, label: "Ticketing System", icon: Globe },
-  { id: 2, label: "Import Policies", icon: FileText },
-  { id: 3, label: "Configure Agent", icon: Bot },
-];
-
-const SETTINGS_STEPS = [
-  { id: 1, label: "Ticketing System", icon: Globe },
-  { id: 3, label: "Configure Agent", icon: Bot },
-];
-
-function Stepper({ current, statuses, onSelect, isWizard }: {
-  current: number;
-  statuses: Record<number, string>;
-  onSelect: (step: number) => void;
-  isWizard: boolean;
-}) {
-  const steps = isWizard ? WIZARD_STEPS : SETTINGS_STEPS;
-  return (
-    <div className="flex flex-col gap-1 w-56 shrink-0">
-      {steps.map((step, idx) => {
-        const status = statuses[step.id] || "pending";
-        const isCurrent = current === step.id;
-        const canClick = !isWizard || status === "complete" || status === "skipped" || isCurrent;
-        const Icon = step.icon;
-
-        return (
-          <button
-            key={step.id}
-            onClick={() => canClick && onSelect(step.id)}
-            disabled={!canClick}
-            className={`flex items-center gap-3 px-3 py-3 rounded-lg text-left transition-all text-sm
-              ${isCurrent ? "bg-indigo-50 border border-indigo-200 text-indigo-700 font-medium" : ""}
-              ${!isCurrent && status === "complete" ? "text-green-700 hover:bg-green-50" : ""}
-              ${!isCurrent && status === "skipped" ? "text-amber-600 hover:bg-amber-50" : ""}
-              ${!isCurrent && status === "pending" ? "text-gray-400" : ""}
-              ${canClick && !isCurrent ? "cursor-pointer" : ""}
-              ${!canClick ? "cursor-not-allowed opacity-50" : ""}
-            `}
-          >
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-xs font-semibold
-              ${isCurrent ? "bg-indigo-600 text-white" : ""}
-              ${!isCurrent && status === "complete" ? "bg-green-100 text-green-700" : ""}
-              ${!isCurrent && status === "skipped" ? "bg-amber-100 text-amber-600" : ""}
-              ${!isCurrent && status === "pending" ? "bg-gray-100 text-gray-400" : ""}
-            `}>
-              {status === "complete" ? <Check className="w-3.5 h-3.5" /> :
-               status === "skipped" ? <AlertTriangle className="w-3.5 h-3.5" /> :
-               idx + 1}
-            </div>
-            <div className="flex flex-col">
-              <span>{step.label}</span>
-              {status === "skipped" && !isCurrent && (
-                <span className="text-xs text-amber-500">Skipped</span>
-              )}
-              {status === "complete" && !isCurrent && (
-                <span className="text-xs text-green-600">Complete</span>
-              )}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/* ================================================================
-   STEP 1 — Connect Ticketing System (Zendesk)
-   ================================================================ */
-function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
-  const {
-    zendesk, setZendesk, zendeskConnected,
-    stepStatuses, setStepStatus, setSetupStep,
-  } = useApp();
-
+function TicketingSystemSection() {
+  const { zendesk, setZendesk, zendeskConnected } = useApp();
   const [demoBranch, setDemoBranch] = useState<"success" | "error">("success");
-
-  const currentSubStep = useMemo(() => {
-    if (zendesk.triggerStatus === "verified") return 3;
-    if (zendesk.seatStatus === "verified") return 3;
-    if (zendesk.authStatus === "success") return 2;
-    return 1;
-  }, [zendesk.authStatus, zendesk.seatStatus, zendesk.triggerStatus]);
 
   const handleAuthorize = () => {
     if (!zendesk.subdomain.trim()) {
@@ -177,10 +104,7 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
         setZendesk({ seatStatus: "verified", seatError: "" });
         toast.success("Agent seat bound successfully");
       } else {
-        setZendesk({
-          seatStatus: "error",
-          seatError: "This seat does not have the required permissions.",
-        });
+        setZendesk({ seatStatus: "error", seatError: "This seat does not have the required permissions." });
       }
     }, 1200);
   };
@@ -190,13 +114,7 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
     setTimeout(() => {
       if (demoBranch === "success") {
         setZendesk({ triggerStatus: "verified", triggerError: "" });
-        if (isWizard) {
-          setStepStatus(1, "complete");
-          setSetupStep(2);
-          toast.success("Connection verified! Moving to next step.");
-        } else {
-          toast.success("Connection verified");
-        }
+        toast.success("Connection verified");
       } else {
         setZendesk({
           triggerStatus: "error",
@@ -222,10 +140,8 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
     }, 1000);
   };
 
-  const allDone = zendesk.authStatus === "success" && zendesk.seatStatus === "verified" && zendesk.triggerStatus === "verified";
-  const showStep1 = !isWizard || currentSubStep >= 1;
-  const showStep2 = !isWizard || currentSubStep >= 2;
-  const showStep3 = !isWizard || currentSubStep >= 3;
+  const showStep2 = zendesk.authStatus === "success";
+  const showStep3 = zendesk.seatStatus === "verified";
 
   function SubStepStatus({ done }: { done: boolean }) {
     return done ? (
@@ -236,19 +152,7 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">
-          {isWizard ? "Connect Ticketing System" : "Ticketing System"}
-        </h2>
-        <p className="text-sm text-gray-500 mt-1">
-          {isWizard
-            ? "Connect your ticketing system so your AI Rep can read and respond to tickets."
-            : "Manage your ticketing system integration and connection settings."
-          }
-        </p>
-      </div>
-
+    <div className="space-y-5">
       {/* Integration note */}
       <div className="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
         <Info className="w-4 h-4 text-gray-400 shrink-0" />
@@ -278,43 +182,41 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
       {/* Vertical sub-steps */}
       <div className="space-y-4">
         {/* Sub-step 1: Authorize API */}
-        {showStep1 && (
-          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.authStatus === "success" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
-            <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">1</span>
-              <h3 className="text-sm font-semibold text-gray-800">Authorize Zendesk API</h3>
-              <SubStepStatus done={zendesk.authStatus === "success"} />
-            </div>
-            <p className="text-xs text-gray-500 ml-7">
-              Enter your Zendesk subdomain to authorize API access. <code className="text-[11px] bg-gray-100 px-1 py-0.5 rounded">https://<strong>your-subdomain</strong>.zendesk.com</code>
-            </p>
-            {zendesk.authStatus !== "success" && (
-              <div className="ml-7 space-y-2">
-                <div className="flex items-center gap-1.5 max-w-md">
-                  <span className="text-xs text-gray-500 shrink-0">https://</span>
-                  <Input
-                    value={zendesk.subdomain}
-                    onChange={(e) => setZendesk({ subdomain: e.target.value, authError: "" })}
-                    placeholder="your-subdomain"
-                    className="text-sm flex-1"
-                  />
-                  <span className="text-xs text-gray-500 shrink-0">.zendesk.com</span>
-                </div>
-                {zendesk.authError && <p className="text-xs text-red-600">{zendesk.authError}</p>}
-                <Button size="sm" onClick={handleAuthorize} disabled={zendesk.authStatus === "loading"}>
-                  {zendesk.authStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Connecting...</> : "Connect"}
-                </Button>
-              </div>
-            )}
-            {zendesk.authStatus === "success" && (
-              <p className="text-xs text-green-700 ml-7">Connected to <strong>{zendesk.subdomain}.zendesk.com</strong></p>
-            )}
+        <div className={`rounded-lg border p-4 space-y-3 ${zendesk.authStatus === "success" ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
+          <div className="flex items-center gap-2">
+            <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">1</span>
+            <h3 className="text-sm font-semibold text-gray-800">Authorize Zendesk API</h3>
+            <SubStepStatus done={zendesk.authStatus === "success"} />
           </div>
-        )}
+          <p className="text-xs text-gray-500 ml-7">
+            Enter your Zendesk subdomain to authorize API access. <code className="text-[11px] bg-gray-100 px-1 py-0.5 rounded">https://<strong>your-subdomain</strong>.zendesk.com</code>
+          </p>
+          {zendesk.authStatus !== "success" && (
+            <div className="ml-7 space-y-2">
+              <div className="flex items-center gap-1.5 max-w-md">
+                <span className="text-xs text-gray-500 shrink-0">https://</span>
+                <Input
+                  value={zendesk.subdomain}
+                  onChange={(e) => setZendesk({ subdomain: e.target.value, authError: "" })}
+                  placeholder="your-subdomain"
+                  className="text-sm flex-1"
+                />
+                <span className="text-xs text-gray-500 shrink-0">.zendesk.com</span>
+              </div>
+              {zendesk.authError && <p className="text-xs text-red-600">{zendesk.authError}</p>}
+              <Button size="sm" onClick={handleAuthorize} disabled={zendesk.authStatus === "loading"}>
+                {zendesk.authStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Connecting...</> : "Connect"}
+              </Button>
+            </div>
+          )}
+          {zendesk.authStatus === "success" && (
+            <p className="text-xs text-green-700 ml-7">Connected to <strong>{zendesk.subdomain}.zendesk.com</strong></p>
+          )}
+        </div>
 
-        {/* Sub-step 2: Bind Agent Seat */}
+        {/* Sub-step 2: Bind Agent Seat — only show if step 1 done */}
         {showStep2 && (
-          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.seatStatus === "verified" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
+          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.seatStatus === "verified" ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">2</span>
               <h3 className="text-sm font-semibold text-gray-800">Bind Agent Seat</h3>
@@ -351,9 +253,9 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
           </div>
         )}
 
-        {/* Sub-step 3: Verify Connection */}
+        {/* Sub-step 3: Verify Connection — only show if step 2 done */}
         {showStep3 && (
-          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.triggerStatus === "verified" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
+          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.triggerStatus === "verified" ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
             <div className="flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">3</span>
               <h3 className="text-sm font-semibold text-gray-800">Verify Connection</h3>
@@ -363,49 +265,30 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
               Assign a test ticket to <strong>{zendesk.availableSeats.find(s => s.id === zendesk.selectedSeat)?.name || "the AI Agent"}</strong> in your Zendesk dashboard, then click Verify below.
             </p>
             <div className="ml-7 space-y-2">
+              <div className="flex items-center gap-2">
+                <a href="#" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+                  Open Zendesk Dashboard <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
               {zendesk.triggerError && <p className="text-xs text-red-600">{zendesk.triggerError}</p>}
               {zendesk.triggerStatus !== "verified" && (
                 <Button size="sm" onClick={handleVerifyConnection} disabled={zendesk.triggerStatus === "loading"}>
-                  {zendesk.triggerStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Waiting for ticket...</> : "Verify"}
+                  {zendesk.triggerStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Verifying...</> : "Verify"}
                 </Button>
               )}
               {zendesk.triggerStatus === "verified" && (
-                <p className="text-xs text-green-700">Connection verified — tickets are being received.</p>
+                <p className="text-xs text-green-700">Connection verified — test ticket received successfully.</p>
               )}
             </div>
           </div>
         )}
       </div>
 
-      {/* All done summary */}
-      {allDone && !isWizard && (
+      {/* All done indicator */}
+      {zendeskConnected && (
         <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
           <Check className="w-4 h-4 text-green-600 shrink-0" />
-          <p className="text-xs text-green-700 font-medium">Zendesk integration is fully connected and verified.</p>
-        </div>
-      )}
-
-      {/* Footer — wizard only */}
-      {isWizard && !allDone && (
-        <div className="flex items-center pt-4 border-t border-gray-200">
-          <button
-            onClick={() => {
-              setStepStatus(1, "skipped");
-              setSetupStep(2);
-            }}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            Skip for now
-          </button>
-        </div>
-      )}
-
-      {/* Settings mode: save button */}
-      {!isWizard && (
-        <div className="flex justify-end pt-4 border-t border-gray-200">
-          <Button size="sm" onClick={() => toast.success("Ticketing system settings saved")}>
-            Save Changes
-          </Button>
+          <p className="text-sm text-green-800 font-medium">Ticketing system connected and verified.</p>
         </div>
       )}
     </div>
@@ -413,229 +296,12 @@ function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
 }
 
 /* ================================================================
-   STEP 2 — Import Policies (wizard only)
-   ================================================================ */
-function ImportPoliciesStep() {
-  const {
-    sopUploaded, setSopUploaded,
-    extractedRuleNames, setExtractedRuleNames,
-    stepStatuses, setStepStatus, setSetupStep,
-    setMainTab, setPlaybookDeepLink,
-  } = useApp();
-
-  const [uploading, setUploading] = useState(false);
-  const [urlInput, setUrlInput] = useState("");
-  const [demoBranch, setDemoBranch] = useState<"no-conflict" | "with-conflict">("no-conflict");
-  const [conflicts, setConflicts] = useState<{ id: string; question: string; optionA: string; optionB: string; choice: string | null; resolved: boolean }[]>([]);
-
-  const handleUpload = () => {
-    setUploading(true);
-    setTimeout(() => {
-      setUploading(false);
-      setSopUploaded(true);
-      setExtractedRuleNames([
-        "30-day return policy for unused items",
-        "Free shipping on orders over $50",
-        "Seel protection claim within 30 days of delivery",
-        "Auto-refund for items lost in transit",
-        "VIP customers get priority escalation",
-      ]);
-      if (demoBranch === "with-conflict") {
-        setConflicts([
-          { id: "c1", question: "Conflicting return windows found:", optionA: "30-day return window (from SOP document)", optionB: "14-day return window (from existing rules)", choice: null, resolved: false },
-        ]);
-      }
-      toast.success("Documents analyzed — 5 rules extracted");
-    }, 2000);
-  };
-
-  const resolveConflict = (id: string, choice: string) => {
-    setConflicts(prev => prev.map(c => c.id === id ? { ...c, choice, resolved: choice !== "later" } : c));
-  };
-
-  const allConflictsResolved = conflicts.every((c) => c.resolved);
-
-  const handleContinue = () => {
-    setStepStatus(2, sopUploaded ? "complete" : "skipped");
-    setSetupStep(3);
-  };
-
-  const goToPlaybook = () => {
-    setPlaybookDeepLink("documents");
-    setMainTab("playbook");
-  };
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Import Policies</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          Upload your customer service SOP documents. We'll extract rules and load them into the knowledge base.
-        </p>
-      </div>
-
-      {/* Demo branch toggle */}
-      <div className="flex items-center gap-2 p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs">
-        <span className="text-amber-700 font-medium">DEMO:</span>
-        <button onClick={() => setDemoBranch("no-conflict")} className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${demoBranch === "no-conflict" ? "bg-green-100 text-green-700" : "text-gray-500 hover:bg-gray-100"}`}>No Conflicts</button>
-        <button onClick={() => setDemoBranch("with-conflict")} className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${demoBranch === "with-conflict" ? "bg-red-100 text-red-700" : "text-gray-500 hover:bg-gray-100"}`}>With Conflicts</button>
-      </div>
-
-      {!sopUploaded && !uploading && (
-        <div className="space-y-4">
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-indigo-300 transition-colors">
-            <Upload className="w-8 h-8 text-gray-400 mx-auto mb-3" />
-            <p className="text-sm font-medium text-gray-700 mb-1">Drag & drop your SOP files here</p>
-            <p className="text-xs text-gray-500 mb-4">Supports PDF, DOCX, TXT (max 10MB per file)</p>
-            <Button size="sm" onClick={handleUpload}>
-              <Upload className="w-3.5 h-3.5 mr-1.5" /> Choose Files
-            </Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400">or</span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Link2 className="w-4 h-4 text-gray-400 shrink-0" />
-            <Input value={urlInput} onChange={(e) => setUrlInput(e.target.value)} placeholder="Paste a URL to your help center or knowledge base" className="text-sm" />
-            <Button size="sm" variant="outline" onClick={handleUpload}>Import</Button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-gray-200" />
-            <span className="text-xs text-gray-400">or</span>
-            <div className="flex-1 h-px bg-gray-200" />
-          </div>
-
-          <Button variant="outline" size="sm" onClick={handleUpload} className="w-full">
-            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Try with a sample document
-          </Button>
-        </div>
-      )}
-
-      {uploading && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mb-3" />
-          <p className="text-sm text-gray-600 font-medium">Analyzing documents and extracting rules...</p>
-          <p className="text-xs text-gray-400 mt-1">This may take a moment</p>
-        </div>
-      )}
-
-      {sopUploaded && !uploading && (
-        <div className="space-y-4">
-          <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <div className="flex items-center gap-2 mb-2">
-              <Check className="w-4 h-4 text-green-600" />
-              <span className="text-sm font-semibold text-green-800">
-                {extractedRuleNames.length} rules extracted from your documents
-              </span>
-            </div>
-            <ul className="space-y-1 ml-6">
-              {extractedRuleNames.map((name, i) => (
-                <li key={i} className="text-xs text-green-700 flex items-center gap-1.5">
-                  <div className="w-1 h-1 rounded-full bg-green-400" />
-                  {name}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Playbook hint with link */}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
-            <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
-            <div className="text-xs text-blue-700">
-              <p className="font-medium">After setup, manage your knowledge base in Playbook</p>
-              <p className="mt-0.5">
-                You can upload additional documents, edit rules, and manage your knowledge base from the Playbook → Documents tab.
-              </p>
-              <button
-                onClick={goToPlaybook}
-                className="mt-1.5 text-blue-600 font-medium hover:underline flex items-center gap-1"
-              >
-                Go to Playbook → Documents <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          {conflicts.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
-                <span className="text-sm font-semibold text-amber-800">
-                  {conflicts.length} conflict{conflicts.length > 1 ? "s" : ""} found — please resolve
-                </span>
-              </div>
-              {conflicts.map((conflict) => (
-                <div key={conflict.id} className={`p-4 rounded-lg border ${conflict.resolved ? "border-green-200 bg-green-50/50" : "border-amber-200 bg-amber-50/50"}`}>
-                  <p className="text-sm font-medium text-gray-800 mb-2">{conflict.question}</p>
-                  <div className="space-y-2">
-                    <button
-                      onClick={() => resolveConflict(conflict.id, "A")}
-                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition-colors ${
-                        conflict.choice === "A" ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-200 hover:border-gray-300 text-gray-700"
-                      }`}
-                    >
-                      {conflict.optionA}
-                    </button>
-                    <button
-                      onClick={() => resolveConflict(conflict.id, "B")}
-                      className={`w-full text-left p-2.5 rounded-lg border text-xs transition-colors ${
-                        conflict.choice === "B" ? "border-indigo-300 bg-indigo-50 text-indigo-700" : "border-gray-200 hover:border-gray-300 text-gray-700"
-                      }`}
-                    >
-                      {conflict.optionB}
-                    </button>
-                    {!conflict.resolved && (
-                      <button onClick={() => resolveConflict(conflict.id, "later")} className="text-xs text-gray-500 hover:text-gray-700 underline">
-                        Decide later
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setSetupStep(1)}>
-            <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
-          </Button>
-          <button
-            onClick={() => {
-              setStepStatus(2, "skipped");
-              setSetupStep(3);
-            }}
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            Skip for now
-          </button>
-        </div>
-        <Button
-          onClick={handleContinue}
-          size="sm"
-          disabled={conflicts.length > 0 && !allConflictsResolved && sopUploaded}
-        >
-          Continue <ChevronRight className="w-3.5 h-3.5 ml-1" />
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================
-   STEP 3 — Configure Agent
-   Flat layout (no outer collapsibles): Identity, Permissions, Channels, Handoff, Email
-   Go Live Mode REMOVED from here — now in Rep header (Plan B)
+   SECTION 2 — Configure Agent
+   Flat layout: Identity, Permissions, Channels & Escalation
    Multi-agent secondary nav at top
+   First-time: "Hire Rep" button; subsequent: "Save Changes"
    ================================================================ */
-function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
+function ConfigureAgentSection() {
   const {
     repHired, setRepHired,
     hiredRepName, setHiredRepName,
@@ -646,10 +312,9 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
     handoff, setHandoff,
     discloseAI, setDiscloseAI,
     emailSignoff, setEmailSignoff,
-    zendeskConnected,
-    stepStatuses, setStepStatus, setSetupStep,
-    setSetupComplete, setAgentMode,
     agentsData,
+    setMainTab,
+    setShowSettings,
   } = useApp();
 
   const [showReadActions, setShowReadActions] = useState(false);
@@ -685,26 +350,25 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
     );
   };
 
-  const canGoLive = zendeskConnected;
   const nonLeadAgents = agentsData.filter(a => !a.isTeamLead);
+  const isFirstHire = !repHired;
 
-  const handleComplete = () => {
+  const handleSave = () => {
     if (!hiredRepName.trim()) {
       toast.error("Please enter a name for your AI Rep");
       return;
     }
-    if (isWizard && !canGoLive) {
-      setRepHired(false);
-      setStepStatus(3, "complete");
-      setSetupComplete(true);
-      setAgentMode("normal");
-      toast.success(`Configuration saved. Complete ticketing system setup to activate ${hiredRepName}.`);
-    } else {
+    if (!repPersonality) {
+      toast.error("Please select a personality for your AI Rep");
+      return;
+    }
+    if (isFirstHire) {
       setRepHired(true);
-      setStepStatus(3, "complete");
-      setSetupComplete(true);
-      setAgentMode("normal");
-      toast.success(`${hiredRepName} configuration saved!`);
+      toast.success(`${hiredRepName} has been hired!`);
+      setShowSettings(false);
+      setMainTab("agents");
+    } else {
+      toast.success("Agent configuration saved");
     }
   };
 
@@ -751,16 +415,6 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-lg font-semibold text-gray-900">Configure Agent</h2>
-        <p className="text-sm text-gray-500 mt-1">
-          {isWizard
-            ? "Set up your AI Rep's identity, permissions, channels, and escalation rules."
-            : "Manage your AI Rep's configuration and behavior."
-          }
-        </p>
-      </div>
-
       {/* ── Multi-agent secondary nav ── */}
       <div className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
         {nonLeadAgents.map((agent) => (
@@ -769,7 +423,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium"
           >
             <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: agent.color }}>
-              {agent.initials}
+              {hiredRepName ? hiredRepName.slice(0, 2).toUpperCase() : agent.initials}
             </div>
             {hiredRepName || agent.name}
           </button>
@@ -782,7 +436,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
         </button>
       </div>
 
-      {/* ── Identity — flat, no collapsible ── */}
+      {/* ── Identity ── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4 text-gray-600" />
@@ -855,7 +509,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 
       <div className="border-t border-gray-100" />
 
-      {/* ── Action Permissions — flat, no outer collapsible ── */}
+      {/* ── Action Permissions ── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <Shield className="w-4 h-4 text-gray-600" />
@@ -863,7 +517,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
         </div>
 
         <div className="ml-6 space-y-4">
-          {/* READ ACTIONS — grouped by domain, default all on, collapsible */}
+          {/* READ ACTIONS */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Read Actions</p>
@@ -890,7 +544,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
             )}
           </div>
 
-          {/* WRITE ACTIONS — grouped by domain */}
+          {/* WRITE ACTIONS */}
           <div>
             <p className="text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider">Read & Write Actions</p>
             <div className="space-y-2">
@@ -904,7 +558,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 
       <div className="border-t border-gray-100" />
 
-      {/* ── Channels with per-channel handoff ── */}
+      {/* ── Channels & Escalation ── */}
       <div className="space-y-4">
         <div className="flex items-center gap-2">
           <MessageSquare className="w-4 h-4 text-gray-600" />
@@ -941,13 +595,13 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 
                 <div className="border-t border-gray-100" />
 
-                {/* Escalation Handoff for Email */}
+                {/* Escalation Handoff for Email — all flat, no tabs */}
                 <div>
                   <p className="text-xs font-medium text-gray-600 uppercase tracking-wider mb-3">Escalation Handoff</p>
                   <p className="text-xs text-gray-400 mb-4">Configure how escalated email tickets are handled.</p>
 
                   {/* Assign to Group */}
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-2 mb-5">
                     <div className="flex items-center gap-2">
                       <Users className="w-3.5 h-3.5 text-gray-500" />
                       <h4 className="text-xs font-semibold text-gray-700">Assign to Group</h4>
@@ -958,16 +612,14 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
                       className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                     >
                       <option value="">Select a group...</option>
-                      {handoff.availableGroups.map((group) => (
-                        <option key={group} value={group}>{group}</option>
+                      {handoff.availableGroups.map((g) => (
+                        <option key={g} value={g}>{g}</option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="border-t border-gray-100 my-3" />
-
                   {/* Assign to Person */}
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-2 mb-5">
                     <div className="flex items-center gap-2">
                       <UserCheck className="w-3.5 h-3.5 text-gray-500" />
                       <h4 className="text-xs font-semibold text-gray-700">Assign to Person</h4>
@@ -977,17 +629,15 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
                       onChange={(e) => setHandoff({ selectedHandoffSeat: e.target.value })}
                       className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
                     >
-                      <option value="">Select a team member...</option>
-                      {handoff.availableHandoffSeats.map((seat) => (
-                        <option key={seat.id} value={seat.id}>{seat.name} ({seat.email})</option>
+                      <option value="">Select a person...</option>
+                      {handoff.availableHandoffSeats.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name} ({s.email})</option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="border-t border-gray-100 my-3" />
-
                   {/* Add Tag */}
-                  <div className="space-y-2 mb-4">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Tag className="w-3.5 h-3.5 text-gray-500" />
                       <h4 className="text-xs font-semibold text-gray-700">Add Tag</h4>
@@ -995,7 +645,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
                     <Input
                       value={handoff.handoffTag}
                       onChange={(e) => setHandoff({ handoffTag: e.target.value })}
-                      placeholder="e.g., ai-escalated"
+                      placeholder="e.g., escalated, needs-review"
                       className="max-w-sm text-sm"
                     />
                     <div className="flex items-center gap-2 mt-2">
@@ -1052,24 +702,9 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-        <div>
-          {isWizard && (
-            <Button variant="ghost" size="sm" onClick={() => setSetupStep(2)}>
-              <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
-            </Button>
-          )}
-        </div>
-        <Button onClick={handleComplete} size="sm">
-          {isWizard ? (
-            canGoLive ? (
-              <>{`Save & Activate ${hiredRepName || "Rep"}`} <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
-            ) : (
-              <>Save Configuration <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
-            )
-          ) : (
-            "Save Changes"
-          )}
+      <div className="flex items-center justify-end pt-4 border-t border-gray-200">
+        <Button onClick={handleSave} size="sm">
+          {isFirstHire ? `Hire ${hiredRepName || "Rep"}` : "Save Changes"}
         </Button>
       </div>
     </div>
@@ -1077,25 +712,45 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 }
 
 /* ================================================================
-   MAIN EXPORT — SetupSettings
+   MAIN EXPORT — SetupSettings (Settings-only, no wizard)
+   Renders two sections with settingsSection deep-link support
    ================================================================ */
-export default function SetupSettings({ isWizard = true }: { isWizard?: boolean }) {
-  const { setupStep, setSetupStep, stepStatuses } = useApp();
+export default function SetupSettings() {
+  const { settingsSection, zendeskConnected } = useApp();
+  const agentRef = useRef<HTMLDivElement>(null);
+  const ticketingRef = useRef<HTMLDivElement>(null);
 
-  const effectiveStep = !isWizard && setupStep === 2 ? 1 : setupStep;
+  useEffect(() => {
+    if (settingsSection === "agent" && agentRef.current) {
+      agentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (settingsSection === "ticketing" && ticketingRef.current) {
+      ticketingRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [settingsSection]);
 
   return (
-    <div className="flex gap-6 h-full">
-      <Stepper
-        current={effectiveStep}
-        statuses={stepStatuses}
-        onSelect={setSetupStep}
-        isWizard={isWizard}
-      />
-      <div className="flex-1 overflow-y-auto pr-2">
-        {effectiveStep === 1 && <TicketingSystemStep isWizard={isWizard} />}
-        {effectiveStep === 2 && isWizard && <ImportPoliciesStep />}
-        {effectiveStep === 3 && <ConfigureAgentStep isWizard={isWizard} />}
+    <div className="space-y-10">
+      {/* Section 1: Ticketing System */}
+      <div ref={ticketingRef}>
+        <div className="flex items-center gap-2 mb-4">
+          <Globe className="w-5 h-5 text-gray-700" />
+          <h2 className="text-lg font-semibold text-gray-900">Ticketing System</h2>
+          {zendeskConnected && (
+            <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px] ml-2">Connected</Badge>
+          )}
+        </div>
+        <TicketingSystemSection />
+      </div>
+
+      <div className="border-t border-gray-200" />
+
+      {/* Section 2: Configure Agent */}
+      <div ref={agentRef}>
+        <div className="flex items-center gap-2 mb-4">
+          <Bot className="w-5 h-5 text-gray-700" />
+          <h2 className="text-lg font-semibold text-gray-900">Configure Agent</h2>
+        </div>
+        <ConfigureAgentSection />
       </div>
     </div>
   );

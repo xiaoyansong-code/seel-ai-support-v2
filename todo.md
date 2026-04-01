@@ -1,26 +1,32 @@
-# Round 5 Todo
+# Round 7 Todo
 
-## SetupSettings.tsx
-- [ ] Remove Import Policies section from Settings mode (isWizard=false)
-- [ ] Add Playbook hint in onboarding Import step
-- [ ] Zendesk: vertical layout (3 sub-steps stacked, not tabs)
-- [ ] Zendesk: unified "View Setup Guide" link above all sub-steps
-- [ ] Zendesk: onboarding — step-by-step reveal, single Primary CTA per step, auto-advance
-- [ ] Zendesk: settings — no step numbers, no Skip/Continue, sections with fold/unfold
-- [ ] Zendesk Step 3: rename to "Verify Connection" — assign test ticket, verify receipt
-- [ ] Action Permissions: Read (default all on, collapsible) + Read & Write (subcategories)
-- [ ] Action Permissions: name + toggle only, description in hover tooltip
-- [ ] Action Permissions: subcategory collapsible with "X of Y enabled" summary
-- [ ] Escalation Handoff: flat vertical layout, no tabs
-- [ ] Go-Live: both modes require Zendesk; "Save Configuration" when not connected
-- [ ] Differentiate onboarding vs settings text/buttons
+## Architecture Change
+- [ ] Remove Setup Wizard mode entirely (no more Setup/Normal toggle)
+- [ ] Setup Progress becomes the ONLY content on Team Lead page when setup incomplete
+- [ ] Remove "What you'll get" preview cards from Team Lead page
 
-## AgentsPage.tsx
-- [ ] Team Lead preview/expectation page when setup incomplete
-- [ ] Show capabilities preview (Digest, Proposals, Insights) with sample data labeled as preview
+## Setup Progress Steps
+- [ ] Step 1: Connect Ticketing System → links to Settings > Ticketing System section
+- [ ] Step 2: Import Policies → links to Playbook > Documents tab (NOT a wizard step)
+- [ ] Step 3: Configure Agent → links to Settings > Configure Agent section
+- [ ] Step 4: Send Rep to Work → only enabled when steps 1-3 complete; guides user to set Go Live status
+- [ ] Each step shows completion status (done/pending/locked)
+
+## Playbook Documents Tab
+- [ ] Empty state with upload guidance (drag & drop, URL import)
+- [ ] "Try with a sample document" option in empty state
+- [ ] First successful extraction → Team Lead gets a message (like New Rule notification)
+
+## Settings (replaces Setup Wizard)
+- [ ] Ticketing System section: Zendesk sub-steps with progressive disclosure
+- [ ] Configure Agent section: first time — Rep Name & Personality empty, button says "Hire Rep"
+- [ ] On "Hire Rep" save → navigate to home (Team Lead view)
+- [ ] No Skip/Continue buttons — just save/edit in place
 
 ## Home.tsx
-- [ ] Settings: only Zendesk + Configure Agent (remove Import from settings)
+- [ ] Remove Setup/Normal toggle
+- [ ] Settings overlay only shows Ticketing System + Configure Agent
+- [ ] Handle navigation from Setup Progress links
 
-## data.ts
-- [ ] Add subcategory field to ActionPermission for grouping
+## PRD
+- [ ] Write comprehensive Onboarding PRD covering all logic flows

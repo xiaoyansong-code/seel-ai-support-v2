@@ -1,6 +1,6 @@
 /*
  * Home — Main layout: Sidebar + Header Tabs + Content Area
- * Round 6: Ticketing System rename, playbookDeepLink support
+ * Round 7: No wizard mode. Pure tab navigation + Settings overlay.
  */
 import { useApp } from "@/contexts/AppContext";
 import Sidebar from "@/components/Sidebar";
@@ -9,8 +9,8 @@ import PlaybookPage from "@/pages/PlaybookPage";
 import PerformancePage from "@/pages/PerformancePage";
 import SetupSettings from "@/components/SetupSettings";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Settings, X } from "lucide-react";
+import { Badge, } from "@/components/ui/badge";
+import { X } from "lucide-react";
 
 const tabs = [
   { id: "agents" as const, label: "Agents" },
@@ -20,21 +20,15 @@ const tabs = [
 
 export default function Home() {
   const {
-    mainTab, setMainTab, agentMode, setAgentMode,
+    mainTab, setMainTab,
     showSettings, setShowSettings,
-    setupComplete, stepStatuses, zendeskConnected,
     playbookDeepLink, setPlaybookDeepLink,
   } = useApp();
-
-  /* Only show banner for Zendesk skip (Import is managed in Playbook, not a blocking issue) */
-  const zdSkipped = (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete"));
-  const hasSkipped = zdSkipped && setupComplete;
 
   /* Handle tab switch — consume playbookDeepLink */
   const handleTabSwitch = (tabId: typeof mainTab) => {
     setMainTab(tabId);
     if (showSettings) setShowSettings(false);
-    // Clear deep link when navigating away from playbook
     if (tabId !== "playbook" && playbookDeepLink) {
       setPlaybookDeepLink(null);
     }
@@ -70,62 +64,13 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sub-header for Agents tab: TEST MODE + Setup/Normal toggle */}
+        {/* Sub-header for Agents tab: TEST MODE badge */}
         {mainTab === "agents" && !showSettings && (
           <div className="px-5 py-2 border-b border-border bg-[#fffdf7] flex items-center gap-3">
             <Badge variant="outline" className="text-[11px] font-bold border-red-400 text-red-600 bg-red-50">
               TEST MODE
             </Badge>
-            <div className="flex items-center bg-white border border-border rounded-lg overflow-hidden">
-              <button
-                onClick={() => setAgentMode("setup")}
-                className={cn(
-                  "px-3 py-1 text-[12px] font-medium transition-colors",
-                  agentMode === "setup"
-                    ? "bg-[#f5a623] text-white"
-                    : "text-muted-foreground hover:bg-[#fafafa]"
-                )}
-              >
-                Setup
-              </button>
-              <button
-                onClick={() => setAgentMode("normal")}
-                className={cn(
-                  "px-3 py-1 text-[12px] font-medium transition-colors",
-                  agentMode === "normal"
-                    ? "bg-[#f5a623] text-white"
-                    : "text-muted-foreground hover:bg-[#fafafa]"
-                )}
-              >
-                Normal
-              </button>
-            </div>
-            <div className="flex-1" />
-            {agentMode === "normal" && (
-              <button
-                onClick={() => setShowSettings(true)}
-                className="flex items-center gap-1.5 text-[12px] text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Settings size={14} />
-                Settings
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Persistent banner for skipped Ticketing System */}
-        {hasSkipped && mainTab === "agents" && agentMode === "normal" && !showSettings && (
-          <div className="px-5 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
-            <AlertTriangle size={14} className="text-amber-600 shrink-0" />
-            <p className="text-[12px] text-amber-800">
-              Ticketing system connection was skipped. Your Rep can't operate without it.
-            </p>
-            <button
-              onClick={() => setShowSettings(true)}
-              className="text-[12px] text-[#6c47ff] hover:underline font-medium ml-1"
-            >
-              Complete setup
-            </button>
+            <span className="text-[11px] text-muted-foreground">This is a prototype. All data is simulated.</span>
           </div>
         )}
 
@@ -146,7 +91,7 @@ export default function Home() {
                     <X size={18} />
                   </button>
                 </div>
-                <SetupSettings isWizard={false} />
+                <SetupSettings />
               </div>
             </div>
           ) : (

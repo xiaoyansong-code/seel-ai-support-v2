@@ -1,28 +1,38 @@
 /*
  * PlaybookPage — Rules + Documents
- * PRD: US3 — Playbook management with editable rules and document management
+ * Round 7: Documents tab has empty state with guided upload + "Try sample document".
+ *          First successful import triggers a Team Lead topic message.
+ *          Consumes playbookDeepLink to auto-switch to Documents tab.
  */
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
-import type { Rule, Document as DocType } from "@/lib/data";
+import type { Rule, Document as DocType, Topic } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   BookOpen, FileText, Upload, Search, BarChart3, Clock, Smile,
-  ChevronRight, Save, X, Trash2, Eye, History, Lightbulb, Check, Plus
+  ChevronRight, Save, X, Trash2, Eye, History, Lightbulb, Check, Plus,
+  Sparkles, ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
 type PlaybookTab = "rules" | "documents";
 
 export default function PlaybookPage() {
+  const { playbookDeepLink, setPlaybookDeepLink } = useApp();
   const [activeTab, setActiveTab] = useState<PlaybookTab>("rules");
+
+  /* Consume deep-link from Setup Progress */
+  useEffect(() => {
+    if (playbookDeepLink === "documents") {
+      setActiveTab("documents");
+      setPlaybookDeepLink(null);
+    }
+  }, [playbookDeepLink, setPlaybookDeepLink]);
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -233,78 +243,86 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] sm:max-w-[480px] p-0 flex flex-col">
-        <SheetHeader className="px-5 pt-5 pb-0">
+        <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Badge variant="outline" className={cn(
-                  "text-[10px]",
-                  rule.enabled ? "border-green-500 text-green-600" : "border-gray-400 text-gray-500"
-                )}>
-                  {rule.enabled ? "Active" : "Paused"}
-                </Badge>
-                <Badge variant="secondary" className="text-[10px]">{rule.source}</Badge>
-              </div>
-              <SheetTitle className="text-[15px] font-semibold">{rule.name}</SheetTitle>
+            <SheetTitle className="text-[15px]">{rule.name}</SheetTitle>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={cn(
+                "text-[10px]",
+                rule.enabled ? "border-green-500 text-green-600" : "border-gray-400 text-gray-500"
+              )}>
+                {rule.enabled ? "Active" : "Paused"}
+              </Badge>
             </div>
-            {!editing ? (
-              <Button variant="outline" size="sm" className="text-[12px] h-7" onClick={startEdit}>
-                Edit
-              </Button>
-            ) : (
-              <div className="flex gap-1.5">
-                <Button variant="ghost" size="sm" className="text-[12px] h-7" onClick={() => setEditing(false)}>
-                  <X size={12} className="mr-1" /> Cancel
-                </Button>
-                <Button size="sm" className="text-[12px] h-7 bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={saveEdit}>
-                  <Save size={12} className="mr-1" /> Save
-                </Button>
-              </div>
-            )}
+          </div>
+          <div className="flex gap-1 mt-2">
+            {(["content", "stats", "history"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setDetailTab(tab)}
+                className={cn(
+                  "px-3 py-1.5 text-[12px] font-medium rounded-lg capitalize transition-colors",
+                  detailTab === tab ? "bg-[#f0edff] text-[#6c47ff]" : "text-muted-foreground hover:bg-[#f5f5f5]"
+                )}
+              >
+                {tab === "content" && <BookOpen size={12} className="inline mr-1" />}
+                {tab === "stats" && <BarChart3 size={12} className="inline mr-1" />}
+                {tab === "history" && <History size={12} className="inline mr-1" />}
+                {tab}
+              </button>
+            ))}
           </div>
         </SheetHeader>
-
-        {/* Detail Tabs */}
-        <div className="flex border-b border-border px-5 mt-3">
-          {(["content", "stats", "history"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setDetailTab(tab)}
-              className={cn(
-                "px-3 py-2 text-[12px] font-medium capitalize transition-colors border-b-2 -mb-px",
-                detailTab === tab
-                  ? "border-[#6c47ff] text-[#6c47ff]"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              {tab}
-            </button>
-          ))}
-        </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           {detailTab === "content" && (
             <div className="space-y-4">
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
+                  {!editing && (
+                    <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={startEdit}>
+                      Edit
+                    </Button>
+                  )}
+                </div>
                 {editing ? (
-                  <Textarea value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="mt-1 text-[13px] min-h-[60px]" />
+                  <textarea
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full text-[12px] p-2 border border-border rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
+                  />
                 ) : (
-                  <p className="mt-1 text-[13px] text-foreground leading-relaxed">{rule.description}</p>
+                  <p className="text-[12px] text-muted-foreground leading-relaxed">{rule.description}</p>
                 )}
               </div>
+
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Rule Content</label>
+                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Rule Logic</p>
                 {editing ? (
-                  <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="mt-1 text-[13px] min-h-[240px] font-mono" />
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    className="w-full text-[12px] p-3 border border-border rounded-lg font-mono resize-none h-40 focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
+                  />
                 ) : (
-                  <div className="mt-1 bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-4">
-                    <pre className="text-[12px] text-foreground whitespace-pre-wrap font-mono leading-relaxed">{rule.content}</pre>
-                  </div>
+                  <pre className="text-[12px] text-foreground whitespace-pre-wrap font-mono leading-relaxed bg-[#f8f9fa] p-3 rounded-lg border border-border">{rule.content}</pre>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground">
-                <span className="flex items-center gap-1"><Clock size={10} /> Updated: {rule.lastUpdated}</span>
+
+              {editing && (
+                <div className="flex gap-2">
+                  <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={saveEdit}>
+                    <Save size={12} className="mr-1" /> Save Changes
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-8 text-[12px]" onClick={() => setEditing(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-2 border-t border-border">
+                <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
                 <span>Source: {rule.source}</span>
               </div>
             </div>
@@ -315,42 +333,37 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
               <div className="grid grid-cols-3 gap-3">
                 <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
                   <p className="text-[20px] font-bold text-foreground">{rule.stats.used}</p>
-                  <p className="text-[11px] text-muted-foreground">Times Used</p>
+                  <p className="text-[10px] text-muted-foreground">Times Used</p>
                 </div>
                 <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
                   <p className="text-[20px] font-bold text-foreground">{rule.stats.avgCsat}</p>
-                  <p className="text-[11px] text-muted-foreground">Avg CSAT</p>
+                  <p className="text-[10px] text-muted-foreground">Avg CSAT</p>
                 </div>
                 <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
                   <p className="text-[20px] font-bold text-foreground">{rule.stats.deflection}%</p>
-                  <p className="text-[11px] text-muted-foreground">Deflection</p>
+                  <p className="text-[10px] text-muted-foreground">Deflection</p>
                 </div>
               </div>
-              <Separator />
-              <p className="text-[12px] text-muted-foreground">Performance data is based on the last 7 days of ticket handling.</p>
             </div>
           )}
 
           {detailTab === "history" && (
-            <div className="space-y-0">
-              {rule.versionHistory.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground">No version history.</p>
-              ) : (
-                <div className="relative">
-                  <div className="absolute left-[11px] top-2 bottom-2 w-px bg-border" />
-                  {rule.versionHistory.map((v, i) => (
-                    <div key={i} className="flex gap-3 pb-4 relative">
-                      <div className="w-6 h-6 rounded-full bg-[#f0edff] border border-[#6c47ff]/20 flex items-center justify-center shrink-0 z-10">
-                        <History size={12} className="text-[#6c47ff]" />
-                      </div>
-                      <div className="flex-1 pt-0.5">
-                        <p className="text-[13px] font-medium text-foreground">Version {v.version}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{v.diff}</p>
-                        <p className="text-[11px] text-muted-foreground">{v.source} · {v.timestamp}</p>
-                      </div>
+            <div className="space-y-3">
+              {rule.versionHistory.length > 0 ? (
+                rule.versionHistory.map((entry: { version: number; timestamp: string; source: string; diff: string }, i: number) => (
+                  <div key={i} className="border border-border rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[11px] font-medium text-foreground">v{entry.version}</span>
+                      <span className="text-[10px] text-muted-foreground">{entry.timestamp}</span>
                     </div>
-                  ))}
-                </div>
+                    <p className="text-[10px] text-muted-foreground">Source: {entry.source}</p>
+                    {entry.diff && (
+                      <pre className="text-[10px] text-muted-foreground mt-2 bg-[#f8f9fa] p-2 rounded font-mono whitespace-pre-wrap">{entry.diff}</pre>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-[12px] text-muted-foreground text-center py-8">No history yet</p>
               )}
             </div>
           )}
@@ -361,16 +374,22 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
 }
 
 // ============================================================
-// DOCUMENTS VIEW
+// DOCUMENTS VIEW — with empty state + Try Sample Document
 // ============================================================
 function DocumentsView() {
-  const { docsData, addDocument, removeDocument, toggleDocInUse } = useApp();
+  const {
+    docsData, addDocument, removeDocument, toggleDocInUse,
+    updateDocument, addTopic, setSopUploaded, setExtractedRuleNames,
+  } = useApp();
   const [dragOver, setDragOver] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [processing, setProcessing] = useState(false);
 
   const filteredDocs = docsData.filter((d) =>
     d.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const isEmpty = docsData.length === 0;
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -378,36 +397,126 @@ function DocumentsView() {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const file = files[0];
-      const newDoc: DocType = {
-        id: `doc-${Date.now()}`,
-        name: file.name,
-        type: file.name.split(".").pop()?.toUpperCase() || "FILE",
-        size: `${(file.size / 1024).toFixed(0)} KB`,
-        uploadedAt: "Just now",
-        status: "Processing",
-        inUse: false,
-        extractedRules: "",
-      };
-      addDocument(newDoc);
-      toast.success("File uploaded", { description: `${file.name} is being processed.` });
+      handleUploadFile(file.name, `${(file.size / 1024).toFixed(0)} KB`);
     }
-  }, [addDocument]);
+  }, []);
 
-  const simulateUpload = () => {
+  const handleUploadFile = (name: string, size: string) => {
     const newDoc: DocType = {
       id: `doc-${Date.now()}`,
-      name: `New_Document_${Date.now().toString().slice(-4)}.pdf`,
-      type: "PDF",
-      size: "1.2 MB",
+      name,
+      type: name.split(".").pop()?.toUpperCase() || "FILE",
+      size,
       uploadedAt: "Just now",
       status: "Processing",
       inUse: false,
       extractedRules: "",
     };
     addDocument(newDoc);
-    toast.success("File uploaded", { description: `${newDoc.name} is being processed.` });
+    setProcessing(true);
+    toast.success("File uploaded", { description: `${name} is being processed.` });
+
+    // Simulate processing
+    setTimeout(() => {
+      const ruleNames = [
+        "Return Window Policy",
+        "Seel Protection Claim Process",
+        "Shipping Delay Compensation",
+      ];
+      updateDocument(newDoc.id, {
+        status: "Processed",
+        inUse: true,
+        extractedRules: `${ruleNames.length} rules extracted`,
+      });
+      setSopUploaded(true);
+      setExtractedRuleNames(ruleNames);
+      setProcessing(false);
+
+      // Create a Team Lead topic for the first import
+      const newTopic: Topic = {
+        id: `topic-doc-${Date.now()}`,
+        type: "document-parse",
+        badge: "Document Import",
+        confidence: "High",
+        title: `${ruleNames.length} rules extracted from "${name}"`,
+        summary: `Your document has been processed and ${ruleNames.length} support rules were identified. Review and accept them to add to your playbook.`,
+        ruleContent: ruleNames.map((r, i) => `${i + 1}. ${r}`).join("\n"),
+        sourceTickets: [],
+        status: "pending",
+      };
+      addTopic(newTopic);
+      toast.success(`${ruleNames.length} rules extracted`, {
+        description: "Check the Team Lead view for details.",
+      });
+    }, 2500);
   };
 
+  const simulateUpload = () => {
+    handleUploadFile(`Document_${Date.now().toString().slice(-4)}.pdf`, "1.2 MB");
+  };
+
+  const trySampleDocument = () => {
+    handleUploadFile("Seel_Support_SOP_Sample.pdf", "842 KB");
+  };
+
+  /* ── Empty state ── */
+  if (isEmpty) {
+    return (
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 flex items-center justify-center mx-auto mb-5">
+            <FileText className="w-7 h-7 text-indigo-500" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">Import Your Support Documents</h3>
+          <p className="text-sm text-gray-500 mb-6 leading-relaxed">
+            Upload your SOP documents, FAQ sheets, or policy files. We'll automatically extract support rules
+            that your AI Rep can follow when handling customer tickets.
+          </p>
+
+          {/* Upload drop zone */}
+          <div
+            className={cn(
+              "border-2 border-dashed rounded-xl p-8 mb-4 transition-colors cursor-pointer",
+              dragOver ? "border-indigo-400 bg-indigo-50" : "border-gray-300 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/50"
+            )}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={simulateUpload}
+          >
+            <Upload size={28} className="mx-auto mb-3 text-gray-400" />
+            <p className="text-sm text-gray-600 font-medium">Drag & drop files here, or click to upload</p>
+            <p className="text-xs text-gray-400 mt-1">Supports PDF, DOCX, TXT, CSV</p>
+          </div>
+
+          {/* Try sample document */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-200" />
+            </div>
+            <div className="relative flex justify-center">
+              <span className="bg-[#fafafa] px-3 text-xs text-gray-400">or</span>
+            </div>
+          </div>
+
+          <button
+            onClick={trySampleDocument}
+            disabled={processing}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50"
+          >
+            <Sparkles className="w-4 h-4" />
+            Try with a sample document
+            <ArrowRight className="w-3.5 h-3.5" />
+          </button>
+          <p className="text-xs text-gray-400 mt-2">
+            We'll use a sample SOP to show you how rule extraction works.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Normal documents list ── */
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
