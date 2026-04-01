@@ -90,13 +90,18 @@ export interface Ticket {
 
 // --- ESCALATION FEED ---
 export interface EscalationCard {
+  id: string;
   ticketId: string;
   subject: string;
   summary: string;
+  reason: string;
   sentiment: "frustrated" | "neutral" | "urgent";
+  priority: "High" | "Medium" | "Low";
   orderValue: string;
+  time: string;
   createdAt: string;
   status: "needs_attention" | "resolved";
+  thread: { role: "customer" | "rep"; content: string }[];
 }
 
 // --- RULE ---
@@ -522,40 +527,79 @@ export const tickets: Ticket[] = [
 // ============================================================
 export const escalationFeed: EscalationCard[] = [
   {
+    id: "esc-1",
     ticketId: "#4501",
     subject: "Refund to PayPal request",
     summary: "Customer requesting refund to PayPal instead of original credit card. Current rules only cover refunds to original payment method.",
+    reason: "No rule covers PayPal-specific refund routing. Escalated for human decision.",
     sentiment: "frustrated",
+    priority: "High",
     orderValue: "$129.00",
+    time: "2h ago",
     createdAt: "2h ago",
     status: "needs_attention",
+    thread: [
+      { role: "customer", content: "Hi, I paid with PayPal and would like my refund back to PayPal, not my credit card." },
+      { role: "rep", content: "I understand you'd like the refund to your PayPal account. Let me look into this for you." },
+      { role: "customer", content: "Yes please, I don't use that credit card anymore." },
+      { role: "rep", content: "I see — our current policy processes refunds to the original payment method. Let me escalate this to ensure we handle it correctly for you." },
+    ],
   },
   {
+    id: "esc-2",
     ticketId: "#4498",
     subject: "International return — customs duty",
     summary: "Customer in UK asking about customs duty refund on returned item. No rule covers international customs duty handling.",
+    reason: "International customs duty refund not covered by any existing rule.",
     sentiment: "neutral",
+    priority: "Medium",
     orderValue: "$215.00",
+    time: "3h ago",
     createdAt: "3h ago",
     status: "needs_attention",
+    thread: [
+      { role: "customer", content: "I returned my order but I also paid customs duty. Will I get that refunded too?" },
+      { role: "rep", content: "Thank you for reaching out. I'm checking on the customs duty refund policy for international returns." },
+      { role: "customer", content: "It was about £35 in customs fees." },
+      { role: "rep", content: "I understand. This requires a specialist review — let me escalate this to our team for a proper resolution." },
+    ],
   },
   {
+    id: "esc-3",
     ticketId: "#4495",
     subject: "Gift card balance dispute",
     summary: "Customer claims gift card balance is incorrect after partial use. Need to verify transaction history.",
+    reason: "Gift card balance discrepancy requires manual transaction audit.",
     sentiment: "frustrated",
+    priority: "Low",
     orderValue: "$50.00",
+    time: "5h ago",
     createdAt: "5h ago",
     status: "resolved",
+    thread: [
+      { role: "customer", content: "My gift card should have $50 left but it's showing $12." },
+      { role: "rep", content: "I can see your gift card was used for a $38 purchase on March 15th. The remaining balance of $12 is correct." },
+      { role: "customer", content: "Oh I see, I forgot about that purchase. Thank you!" },
+    ],
   },
   {
+    id: "esc-4",
     ticketId: "#4490",
     subject: "Damaged item — photo evidence",
     summary: "Customer sent photos of damaged packaging. Item appears intact but customer insists on replacement.",
+    reason: "Photo evidence assessment needed — packaging damaged but item may be intact.",
     sentiment: "neutral",
+    priority: "Medium",
     orderValue: "$89.00",
+    time: "6h ago",
     createdAt: "6h ago",
     status: "resolved",
+    thread: [
+      { role: "customer", content: "The box arrived completely crushed. I want a replacement." },
+      { role: "rep", content: "I'm sorry about the packaging damage. Could you check if the item inside is also damaged?" },
+      { role: "customer", content: "The item looks fine but I'm worried it might have internal damage." },
+      { role: "rep", content: "I understand your concern. Based on the photos, the item appears intact. We've issued a 15% discount on your next order as a goodwill gesture." },
+    ],
   },
 ];
 

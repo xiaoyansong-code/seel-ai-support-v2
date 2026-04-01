@@ -1,20 +1,20 @@
 /*
- * AgentsPage — Onboarding flow + Normal mode
- * PRD: US1 (Onboarding) + US2 (Normal mode)
- * Round 2: Feishu-style collapsible topics, AI badges, area switching
+ * AgentsPage — Setup Wizard + Normal mode (Team Lead + Rep views)
+ * Round 3: Replaced chat-based onboarding with form-based OnboardingWizard
  */
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
-import { onboardingSteps, dailyDigest, escalationFeed, type OnboardingStep } from "@/lib/data";
+import { dailyDigest, escalationFeed } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowRight, Send, User, Crown, ChevronRight, ChevronDown,
-  AlertTriangle, CheckCircle2, ThumbsUp, ThumbsDown, ExternalLink,
-  Bot
+  Send, User, Crown, ChevronDown,
+  ThumbsUp, ThumbsDown,
+  Bot, Settings,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
+import OnboardingWizard from "@/components/OnboardingWizard";
 
 /* AI Badge */
 function AiBadge() {
@@ -47,319 +47,6 @@ function RichText({ text }: { text: string }) {
         return <p key={i}>{line}</p>;
       })}
     </>
-  );
-}
-
-/* Onboarding Chat Bubble */
-function ChatBubble({
-  step, onAction, isLatest,
-}: {
-  step: OnboardingStep;
-  onAction: (nextStep: number, value?: string) => void;
-  isLatest: boolean;
-}) {
-  const { agentsData, hiredRepName } = useApp();
-  const isRep = step.sender === "rep";
-  const agent = isRep
-    ? agentsData.find((a) => a.id === "agent-alpha")!
-    : agentsData.find((a) => a.id === "team-lead")!;
-
-  const displayText = (step.text || "").replace(/\{rep_name\}/g, hiredRepName);
-
-  return (
-    <div className="flex gap-3 items-start animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div
-        className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
-        style={{ background: agent.color }}
-      >
-        {agent.isTeamLead ? <Crown size={14} /> : agent.initials}
-      </div>
-      <div className="flex-1 max-w-[680px]">
-        <div className="flex items-center gap-1 mb-1">
-          <span className="text-[13px] font-semibold text-foreground">
-            {isRep ? hiredRepName : "Alex (Team Lead)"}
-          </span>
-          <AiBadge />
-          <span className="text-[11px] text-muted-foreground ml-1">just now</span>
-        </div>
-        <div className="bg-[#fffbf0] border border-[#f5e6c8] rounded-xl rounded-tl-sm px-4 py-3 text-[13px] leading-relaxed text-foreground whitespace-pre-wrap">
-          <RichText text={displayText} />
-        </div>
-
-        {isLatest && step.actions && step.actions.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {step.actions.map((action, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant={action.variant === "ghost" ? "ghost" : action.variant === "outline" ? "outline" : "default"}
-                className={cn(
-                  "text-[13px] h-8",
-                  (!action.variant || action.variant === "primary") && "bg-[#6c47ff] hover:bg-[#5a3ad9] text-white"
-                )}
-                onClick={() => onAction(action.nextStep)}
-              >
-                {action.label}
-                {(!action.variant || action.variant === "primary") && <ArrowRight size={14} className="ml-1" />}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {isLatest && step.options && step.options.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {step.options.map((opt, i) => (
-              <Button
-                key={i}
-                size="sm"
-                variant="outline"
-                className="text-[13px] h-8 border-[#6c47ff] text-[#6c47ff] hover:bg-[#f0edff]"
-                onClick={() => onAction(opt.nextStep, opt.value)}
-              >
-                {opt.label}
-              </Button>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* Needs Adjustment inline feedback */
-function NeedsAdjustmentInput({ onSubmit }: { onSubmit: (feedback: string) => void }) {
-  const [value, setValue] = useState("");
-  return (
-    <div className="ml-12 mt-2 max-w-[600px] animate-in fade-in slide-in-from-bottom-2 duration-200">
-      <p className="text-[12px] text-muted-foreground mb-1.5">What should be different?</p>
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && value.trim() && onSubmit(value)}
-          placeholder="e.g. Don't offer a discount code for VIP complaints..."
-          className="flex-1 h-8 px-3 rounded-lg border border-border bg-white text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
-        />
-        <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" disabled={!value.trim()} onClick={() => onSubmit(value)}>
-          Submit
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/* ONBOARDING VIEW */
-function OnboardingView() {
-  const {
-    onboardingStep, setOnboardingStep, setAgentMode, setOnboardingComplete,
-    agentsData, onboardingArea, setOnboardingArea, hiredRepName
-  } = useApp();
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const teamLead = agentsData.find((a) => a.id === "team-lead")!;
-  const rep = agentsData.find((a) => a.id === "agent-alpha")!;
-
-  const [adjustingScenario, setAdjustingScenario] = useState<number | null>(null);
-  const [needsAdjFirstTime, setNeedsAdjFirstTime] = useState(true);
-  const [extraMessages, setExtraMessages] = useState<{ afterStep: number; area: "team-lead" | "rep"; messages: { sender: string; text: string }[] }[]>([]);
-
-  const visibleSteps = onboardingSteps.filter((s) => s.id <= onboardingStep);
-
-  const getStepArea = (step: OnboardingStep): "team-lead" | "rep" => {
-    if (step.sender === "rep") return "rep";
-    if (step.type === "mode-select") return "rep";
-    return "team-lead";
-  };
-
-  const areaSteps = visibleSteps.filter((s) => getStepArea(s) === onboardingArea);
-
-  const handleAction = useCallback(
-    (nextStep: number, _value?: string) => {
-      if (nextStep > onboardingSteps.length) {
-        setOnboardingComplete(true);
-        setAgentMode("normal");
-        return;
-      }
-
-      const targetStep = onboardingSteps.find((s) => s.id === nextStep);
-      if (targetStep) {
-        const targetArea = getStepArea(targetStep);
-        if (targetArea !== onboardingArea) {
-          setOnboardingArea(targetArea);
-        }
-      }
-
-      setOnboardingStep(nextStep);
-    },
-    [onboardingArea, setOnboardingStep, setAgentMode, setOnboardingComplete, setOnboardingArea]
-  );
-
-  const handleNeedsAdjustment = (scenarioStepId: number) => {
-    setAdjustingScenario(scenarioStepId);
-  };
-
-  const handleAdjustmentSubmit = (feedback: string, scenarioStepId: number) => {
-    setAdjustingScenario(null);
-
-    const repConfirmText = needsAdjFirstTime
-      ? "Got it. I'll let Team Lead know \u2014 they'll update the rules.\n\nBy the way \u2014 anytime after setup, if you want to adjust rules, just tell Team Lead in the Communication tab. They'll handle it."
-      : "Got it. I'll let Team Lead know \u2014 they'll update the rules.";
-    setNeedsAdjFirstTime(false);
-
-    setExtraMessages((prev) => [
-      ...prev,
-      {
-        afterStep: scenarioStepId,
-        area: "rep",
-        messages: [{ sender: "rep", text: repConfirmText }],
-      },
-    ]);
-
-    setTimeout(() => {
-      setOnboardingArea("team-lead");
-      setExtraMessages((prev) => [
-        ...prev,
-        {
-          afterStep: scenarioStepId,
-          area: "team-lead",
-          messages: [
-            { sender: "team-lead", text: `The Rep flagged an adjustment for this scenario:\n\n"${feedback}"\n\nI'll update the relevant rule. You can review the change in Playbook.` },
-            { sender: "team-lead", text: "Done! Let's continue the sanity check." },
-          ],
-        },
-      ]);
-
-      setTimeout(() => {
-        setOnboardingArea("rep");
-        const currentStep = onboardingSteps.find((s) => s.id === scenarioStepId);
-        if (currentStep?.options) {
-          const nextStepId = currentStep.options[0].nextStep;
-          setOnboardingStep(nextStepId);
-        }
-      }, 800);
-    }, 600);
-  };
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-      }, 100);
-    }
-  }, [onboardingStep, onboardingArea, extraMessages]);
-
-  const currentAgent = onboardingArea === "team-lead" ? teamLead : rep;
-  const currentLabel = onboardingArea === "team-lead" ? "Alex (Team Lead)" : `${hiredRepName} (Rep)`;
-
-  return (
-    <div className="flex-1 flex h-full">
-      {/* Agent sidebar */}
-      <div className="w-[60px] border-r border-border bg-[#fafafa] flex flex-col items-center py-3 gap-2">
-        <button
-          onClick={() => setOnboardingArea("team-lead")}
-          className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all",
-            onboardingArea === "team-lead" && "ring-2 ring-[#6c47ff] ring-offset-2"
-          )}
-          style={{ background: teamLead.color }}
-          title="Alex (Team Lead)"
-        >
-          <Crown size={16} />
-        </button>
-        {onboardingStep >= 7 && (
-          <>
-            <div className="w-6 border-t border-border my-1" />
-            <button
-              onClick={() => setOnboardingArea("rep")}
-              className={cn(
-                "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all",
-                onboardingArea === "rep" && "ring-2 ring-[#6c47ff] ring-offset-2"
-              )}
-              style={{ background: rep.color }}
-              title={hiredRepName}
-            >
-              {rep.initials}
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Chat area */}
-      <div className="flex-1 flex flex-col">
-        <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-            style={{ background: currentAgent.color }}
-          >
-            {onboardingArea === "team-lead" ? <Crown size={14} /> : rep.initials}
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-[13px] font-semibold">{currentLabel}</span>
-            <AiBadge />
-            <span className="text-[12px] text-muted-foreground ml-2">
-              {onboardingArea === "team-lead" ? "Team Lead \u00b7 Setup" : "AI Support Rep"}
-            </span>
-          </div>
-        </div>
-
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-          {areaSteps.map((step, idx) => {
-            const isLast = idx === areaSteps.length - 1 && step.id === onboardingStep;
-
-            if (step.type === "scenario" && isLast && adjustingScenario === null) {
-              return (
-                <div key={step.id}>
-                  <ChatBubble
-                    step={step}
-                    onAction={(nextStep, value) => {
-                      if (value === "adjust") {
-                        handleNeedsAdjustment(step.id);
-                      } else {
-                        handleAction(nextStep, value);
-                      }
-                    }}
-                    isLatest={true}
-                  />
-                </div>
-              );
-            }
-
-            return (
-              <div key={step.id}>
-                <ChatBubble step={step} onAction={handleAction} isLatest={isLast && adjustingScenario === null} />
-                {extraMessages
-                  .filter((em) => em.afterStep === step.id && em.area === onboardingArea)
-                  .flatMap((em) => em.messages)
-                  .map((msg, mi) => {
-                    const msgAgent = msg.sender === "rep" ? rep : teamLead;
-                    return (
-                      <div key={`extra-${step.id}-${mi}`} className="flex gap-3 items-start mt-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                        <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5" style={{ background: msgAgent.color }}>
-                          {msgAgent.isTeamLead ? <Crown size={14} /> : msgAgent.initials}
-                        </div>
-                        <div className="flex-1 max-w-[680px]">
-                          <div className="flex items-center gap-1 mb-1">
-                            <span className="text-[13px] font-semibold">{msgAgent.isTeamLead ? "Alex (Team Lead)" : hiredRepName}</span>
-                            <AiBadge />
-                            <span className="text-[11px] text-muted-foreground ml-1">just now</span>
-                          </div>
-                          <div className="bg-[#fffbf0] border border-[#f5e6c8] rounded-xl rounded-tl-sm px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap">
-                            <RichText text={msg.text} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-              </div>
-            );
-          })}
-
-          {adjustingScenario !== null && (
-            <NeedsAdjustmentInput onSubmit={(fb) => handleAdjustmentSubmit(fb, adjustingScenario)} />
-          )}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -594,244 +281,263 @@ function TeamLeadView() {
 
 /* NORMAL MODE — REP VIEW */
 function RepView({ agentId }: { agentId: string }) {
-  const { agentsData, hiredRepName } = useApp();
+  const { agentsData, hiredRepName, setShowSettings } = useApp();
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedEscalation, setSelectedEscalation] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<{ sender: string; text: string; time: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const agent = agentsData.find((a) => a.id === agentId)!;
   const needsAttention = escalationFeed.filter((e) => e.status === "needs_attention");
-  const resolvedEscalations = escalationFeed.filter((e) => e.status === "resolved");
-
-  useEffect(() => {
-    setMessages([
-      {
-        sender: agentId,
-        text: `Hi! I'm ${hiredRepName}, your AI support rep. I'm currently in ${agent.mode} mode.\n\nI have ${needsAttention.length} escalated tickets that need your attention. You can review them in the feed on the left, or chat with me about anything.`,
-        time: "Just now",
-      },
-    ]);
-  }, [agentId, hiredRepName, agent.mode, needsAttention.length]);
+  const resolved = escalationFeed.filter((e) => e.status === "resolved");
+  const selectedCard = escalationFeed.find((e) => e.id === selectedEscalation);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
     }
-  }, [messages]);
+  }, [chatMessages]);
 
-  const handleSend = () => {
+  const handleSendChat = () => {
     if (!inputValue.trim()) return;
-    setMessages((prev) => [...prev, { sender: "user", text: inputValue, time: "Just now" }]);
+    setChatMessages((prev) => [...prev, { sender: "user", text: inputValue }]);
     setInputValue("");
     setTimeout(() => {
-      setMessages((prev) => [
+      setChatMessages((prev) => [
         ...prev,
-        { sender: agentId, text: "Thanks for the feedback! I've noted that and will apply it to future tickets. Is there anything specific you'd like me to handle differently?", time: "Just now" },
+        { sender: "rep", text: "I'll look into that right away. Let me check the customer's order history and get back to you with a recommendation." },
       ]);
-    }, 1000);
+    }, 800);
   };
 
   return (
-    <div className="flex-1 flex h-full">
-      {/* Escalation Feed Sidebar */}
-      <div className="w-[280px] border-r border-border bg-[#fafafa] flex flex-col">
-        <div className="px-4 py-3 border-b border-border">
-          <h3 className="text-[13px] font-semibold text-foreground">Escalation Feed</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">{needsAttention.length} need attention</p>
+    <div className="flex-1 flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: agent.color }}>
+          {agent.initials}
         </div>
-        <div className="flex-1 overflow-y-auto">
-          {needsAttention.length > 0 && (
-            <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-1">Needs Attention</p>
-              {needsAttention.map((esc) => (
-                <button
-                  key={esc.ticketId}
-                  onClick={() => setSelectedEscalation(selectedEscalation === esc.ticketId ? null : esc.ticketId)}
-                  className={cn(
-                    "w-full text-left p-3 rounded-lg mb-1 transition-colors",
-                    selectedEscalation === esc.ticketId ? "bg-[#f0edff] border border-[#6c47ff]/20" : "hover:bg-white"
-                  )}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <AlertTriangle size={12} className="text-amber-500" />
-                    <span className="text-[12px] font-semibold text-foreground truncate">{esc.subject}</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{esc.summary}</p>
-                  <div className="flex items-center gap-2 mt-1.5 text-[10px] text-muted-foreground">
-                    <span>{esc.ticketId}</span>
-                    <span>&middot;</span>
-                    <span>{esc.orderValue}</span>
-                    <span>&middot;</span>
-                    <span>{esc.createdAt}</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-          {resolvedEscalations.length > 0 && (
-            <div className="px-3 py-2">
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider px-1 mb-1">Resolved</p>
-              {resolvedEscalations.map((esc) => (
-                <div key={esc.ticketId} className="p-3 rounded-lg mb-1 opacity-60">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <CheckCircle2 size={12} className="text-green-500" />
-                    <span className="text-[12px] font-medium text-foreground truncate">{esc.subject}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-1 text-[10px] text-muted-foreground">
-                    <span>{esc.ticketId}</span>
-                    <span>&middot;</span>
-                    <span>{esc.createdAt}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="flex items-center gap-1 flex-1">
+          <span className="text-[13px] font-semibold">{hiredRepName}</span>
+          <AiBadge />
+          <span className="text-[12px] text-muted-foreground ml-2">AI Support Rep</span>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="text-[11px] h-7"
+          onClick={() => setProfileOpen(true)}
+        >
+          Profile
+        </Button>
       </div>
 
-      {/* Chat area */}
-      <div className="flex-1 flex flex-col">
-        <div className="px-5 py-3 border-b border-border flex items-center justify-between bg-white">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: agent.color }}>
-              {agent.initials}
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[13px] font-semibold">{hiredRepName}</span>
-              <AiBadge />
-              <span className="text-[12px] text-muted-foreground ml-2">{agent.role} &middot; {agent.mode}</span>
-            </div>
-          </div>
-          <Button variant="ghost" size="sm" className="text-[12px] text-muted-foreground" onClick={() => setProfileOpen(true)}>
-            Profile <ChevronRight size={14} className="ml-1" />
-          </Button>
-        </div>
-
-        {selectedEscalation ? (
-          <div className="flex-1 overflow-y-auto p-5">
-            {(() => {
-              const esc = escalationFeed.find((e) => e.ticketId === selectedEscalation);
-              if (!esc) return null;
-              return (
-                <div className="max-w-[600px]">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-600">ESCALATED</Badge>
-                    <Badge variant="secondary" className="text-[10px] capitalize">{esc.sentiment}</Badge>
-                  </div>
-                  <h3 className="text-[15px] font-semibold mb-1">{esc.subject}</h3>
-                  <p className="text-[12px] text-muted-foreground mb-4">Ticket {esc.ticketId} &middot; {esc.orderValue} &middot; {esc.createdAt}</p>
-                  <div className="bg-[#fffbf0] border border-[#f5e6c8] rounded-xl p-4 mb-4">
-                    <p className="text-[11px] font-semibold text-muted-foreground mb-1 uppercase tracking-wider">Handoff Summary</p>
-                    <p className="text-[13px] text-foreground leading-relaxed">{esc.summary}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" className="text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white">
-                      <ExternalLink size={12} className="mr-1" /> Open in Zendesk
-                    </Button>
-                    <Button size="sm" variant="outline" className="text-[12px]" onClick={() => setSelectedEscalation(null)}>
-                      Back to chat
-                    </Button>
-                  </div>
-                </div>
-              );
-            })()}
-          </div>
-        ) : (
+      {/* Content */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
+        {!selectedEscalation ? (
           <>
-            <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-              {messages.map((msg, i) => {
-                const isUser = msg.sender === "user";
-                return (
-                  <div key={i} className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
-                    {isUser ? (
-                      <div className="w-8 h-8 rounded-full bg-[#e5e7eb] flex items-center justify-center text-[#6d7175] shrink-0">
-                        <User size={14} />
+            {/* Escalation Feed */}
+            {needsAttention.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Needs Attention ({needsAttention.length})
+                </p>
+                <div className="space-y-2">
+                  {needsAttention.map((card) => (
+                    <button
+                      key={card.id}
+                      onClick={() => setSelectedEscalation(card.id)}
+                      className="w-full text-left bg-white border border-border rounded-xl p-3.5 hover:border-[#6c47ff]/30 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Badge variant="outline" className="text-[9px] font-bold border-red-200 text-red-600 bg-red-50 h-5 py-0">
+                          {card.priority}
+                        </Badge>
+                        <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
+                        <span className="text-[11px] text-muted-foreground ml-auto">{card.time}</span>
                       </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: agent.color }}>
-                        {agent.initials}
+                      <p className="text-[12px] text-foreground mb-1">{card.subject}</p>
+                      <p className="text-[11px] text-muted-foreground line-clamp-2">{card.reason}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {resolved.length > 0 && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  Recently Resolved ({resolved.length})
+                </p>
+                <div className="space-y-2">
+                  {resolved.map((card) => (
+                    <button
+                      key={card.id}
+                      onClick={() => setSelectedEscalation(card.id)}
+                      className="w-full text-left bg-white border border-border rounded-xl p-3.5 hover:border-[#6c47ff]/30 transition-colors opacity-70"
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="outline" className="text-[9px] font-bold border-green-200 text-green-600 bg-green-50 h-5 py-0">
+                          Resolved
+                        </Badge>
+                        <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
+                        <span className="text-[11px] text-muted-foreground ml-auto">{card.time}</span>
                       </div>
-                    )}
-                    <div className={cn(
-                      "max-w-[520px] rounded-xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap",
-                      isUser ? "bg-[#6c47ff] text-white rounded-tr-sm" : "bg-[#fffbf0] border border-[#f5e6c8] rounded-tl-sm text-foreground"
+                      <p className="text-[12px] text-foreground">{card.subject}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* Escalation Detail */
+          <div className="animate-in fade-in slide-in-from-right-2 duration-200">
+            <button
+              onClick={() => setSelectedEscalation(null)}
+              className="text-[12px] text-[#6c47ff] hover:underline mb-3 flex items-center gap-1"
+            >
+              &larr; Back to feed
+            </button>
+            {selectedCard && (
+              <div className="bg-white border border-border rounded-xl p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Badge variant="outline" className={cn(
+                    "text-[9px] font-bold h-5 py-0",
+                    selectedCard.status === "needs_attention" ? "border-red-200 text-red-600 bg-red-50" : "border-green-200 text-green-600 bg-green-50"
+                  )}>
+                    {selectedCard.priority}
+                  </Badge>
+                  <span className="text-[13px] font-semibold">{selectedCard.ticketId}</span>
+                  <span className="text-[11px] text-muted-foreground ml-auto">{selectedCard.time}</span>
+                </div>
+                <h3 className="text-[14px] font-semibold mb-2">{selectedCard.subject}</h3>
+                <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">{selectedCard.reason}</p>
+                <div className="border-t border-border pt-3 mt-3 space-y-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Conversation Thread</p>
+                  {selectedCard.thread.map((msg, i) => (
+                    <div key={i} className={cn(
+                      "rounded-lg px-3 py-2 text-[12px]",
+                      msg.role === "customer" ? "bg-[#f0f0f0]" : "bg-[#f0edff]"
                     )}>
-                      {!isUser && (
-                        <div className="flex items-center gap-1 mb-1 -mt-0.5">
-                          <span className="text-[11px] font-semibold text-muted-foreground">{hiredRepName}</span>
-                          <AiBadge />
-                        </div>
-                      )}
-                      {msg.text}
+                      <span className="font-semibold text-[11px]">{msg.role === "customer" ? "Customer" : hiredRepName}</span>
+                      {msg.role !== "customer" && <AiBadge />}
+                      <p className="mt-0.5 leading-relaxed">{msg.content}</p>
                     </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat messages */}
+        {chatMessages.map((msg, i) => {
+          const isUser = msg.sender === "user";
+          return (
+            <div key={`chat-${i}`} className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
+              {isUser ? (
+                <div className="w-8 h-8 rounded-full bg-[#e5e7eb] flex items-center justify-center text-[#6d7175] shrink-0">
+                  <User size={14} />
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: agent.color }}>
+                  {agent.initials}
+                </div>
+              )}
+              <div className={cn(
+                "max-w-[560px] rounded-xl px-4 py-3 text-[13px] leading-relaxed",
+                isUser ? "bg-[#6c47ff] text-white rounded-tr-sm" : "bg-[#fffbf0] border border-[#f5e6c8] rounded-tl-sm text-foreground"
+              )}>
+                {!isUser && (
+                  <div className="flex items-center gap-1 mb-1 -mt-0.5">
+                    <span className="text-[11px] font-semibold text-muted-foreground">{hiredRepName}</span>
+                    <AiBadge />
                   </div>
-                );
-              })}
-            </div>
-            <div className="px-5 py-3 border-t border-border bg-white">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  placeholder={`Message ${hiredRepName}...`}
-                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
-                />
-                <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9]" onClick={handleSend}>
-                  <Send size={14} />
-                </Button>
+                )}
+                {msg.text}
               </div>
             </div>
-          </>
-        )}
+          );
+        })}
       </div>
 
-      <AgentProfileSheet agent={agent} open={profileOpen} onOpenChange={setProfileOpen} />
+      {/* Chat Input */}
+      <div className="px-5 py-3 border-t border-border bg-white">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+            placeholder={`Message ${hiredRepName}...`}
+            className="flex-1 h-9 px-3 rounded-lg border border-border bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
+          />
+          <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9]" onClick={handleSendChat}>
+            <Send size={14} />
+          </Button>
+        </div>
+      </div>
+
+      <AgentProfileSheet
+        agent={agent}
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+      />
     </div>
   );
 }
 
-/* NORMAL VIEW — WRAPPER */
+/* NORMAL VIEW — WRAPPER with Settings button at bottom */
 function NormalView() {
-  const { selectedAgentId, setSelectedAgentId, agentsData, hiredRepName } = useApp();
+  const { selectedAgentId, setSelectedAgentId, agentsData, hiredRepName, setShowSettings } = useApp();
   const nonLeadAgents = agentsData.filter((a) => !a.isTeamLead);
   const teamLead = agentsData.find((a) => a.id === "team-lead")!;
 
   return (
     <div className="flex-1 flex h-full">
-      <div className="w-[60px] border-r border-border bg-[#fafafa] flex flex-col items-center py-3 gap-2">
-        <button
-          onClick={() => setSelectedAgentId("team-lead")}
-          className={cn(
-            "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all",
-            selectedAgentId === "team-lead" && "ring-2 ring-[#6c47ff] ring-offset-2"
-          )}
-          style={{ background: teamLead.color }}
-          title="Alex (Team Lead)"
-        >
-          <Crown size={16} />
-        </button>
-        <div className="w-6 border-t border-border my-1" />
-        {nonLeadAgents.map((agent) => (
+      {/* Agent sidebar with Settings at bottom */}
+      <div className="w-[60px] border-r border-border bg-[#fafafa] flex flex-col items-center py-3">
+        <div className="flex flex-col items-center gap-2 flex-1">
           <button
-            key={agent.id}
-            onClick={() => setSelectedAgentId(agent.id)}
+            onClick={() => setSelectedAgentId("team-lead")}
             className={cn(
-              "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all relative",
-              selectedAgentId === agent.id && "ring-2 ring-[#6c47ff] ring-offset-2"
+              "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all",
+              selectedAgentId === "team-lead" && "ring-2 ring-[#6c47ff] ring-offset-2"
             )}
-            style={{ background: agent.color }}
-            title={hiredRepName}
+            style={{ background: teamLead.color }}
+            title="Alex (Team Lead)"
           >
-            {agent.initials}
-            {escalationFeed.filter((e) => e.status === "needs_attention").length > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
-            )}
+            <Crown size={16} />
           </button>
-        ))}
+          <div className="w-6 border-t border-border my-1" />
+          {nonLeadAgents.map((agent) => (
+            <button
+              key={agent.id}
+              onClick={() => setSelectedAgentId(agent.id)}
+              className={cn(
+                "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all relative",
+                selectedAgentId === agent.id && "ring-2 ring-[#6c47ff] ring-offset-2"
+              )}
+              style={{ background: agent.color }}
+              title={hiredRepName}
+            >
+              {agent.initials}
+              {escalationFeed.filter((e) => e.status === "needs_attention").length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
+              )}
+            </button>
+          ))}
+        </div>
+        {/* Settings button at bottom */}
+        <button
+          onClick={() => setShowSettings(true)}
+          className="w-10 h-10 rounded-lg flex items-center justify-center text-muted-foreground hover:bg-[#e5e7eb] hover:text-foreground transition-colors mt-2"
+          title="Settings"
+        >
+          <Settings size={18} />
+        </button>
       </div>
       {selectedAgentId === "team-lead" ? <TeamLeadView /> : <RepView agentId={selectedAgentId} />}
     </div>
@@ -844,7 +550,7 @@ export default function AgentsPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {agentMode === "onboarding" ? <OnboardingView /> : <NormalView />}
+      {agentMode === "setup" ? <OnboardingWizard /> : <NormalView />}
     </div>
   );
 }
