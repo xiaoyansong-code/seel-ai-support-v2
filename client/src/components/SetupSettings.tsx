@@ -456,43 +456,47 @@ function ConfigureAgentSection() {
             />
           </div>
 
-          {/* Personality with examples */}
+          {/* Personality — pill selector + preview */}
           <div>
             <label className="text-xs font-medium text-gray-700 mb-2 block">Personality</label>
-            <div className="space-y-2">
+            <div className="flex items-center gap-1.5 mb-3">
               {(["Friendly", "Professional", "Casual", "Customize"] as const).map((p) => {
-                const example = PERSONALITY_EXAMPLES[p];
                 const isSelected = repPersonality === p;
                 return (
                   <button
                     key={p}
                     onClick={() => setRepPersonality(p)}
-                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                       isSelected
-                        ? "border-indigo-300 bg-indigo-50"
-                        : "border-gray-200 hover:border-gray-300"
+                        ? "bg-indigo-100 text-indigo-700 border border-indigo-300"
+                        : "bg-gray-50 text-gray-600 border border-gray-200 hover:border-gray-300"
                     }`}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-sm font-medium ${isSelected ? "text-indigo-700" : "text-gray-700"}`}>{p}</span>
-                    </div>
-                    <p className="text-xs text-gray-500">{example.description}</p>
-                    {example.sample && (
-                      <div className="mt-2 p-2 bg-white rounded border border-gray-100 text-xs text-gray-600 italic">
-                        "{example.sample}"
-                      </div>
-                    )}
+                    {p}
                   </button>
                 );
               })}
             </div>
+            {/* Preview for selected personality */}
+            {repPersonality && repPersonality !== "Customize" && PERSONALITY_EXAMPLES[repPersonality] && (
+              <div className="p-3 rounded-lg bg-gray-50 border border-gray-200">
+                <p className="text-xs text-gray-500 mb-2">{PERSONALITY_EXAMPLES[repPersonality].description}</p>
+                <div className="p-2.5 bg-white rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-400 mb-1 font-medium">Example response:</p>
+                  <p className="text-sm text-gray-700 italic leading-relaxed">"{PERSONALITY_EXAMPLES[repPersonality].sample}"</p>
+                </div>
+              </div>
+            )}
             {repPersonality === "Customize" && (
-              <textarea
-                value={repCustomTone}
-                onChange={(e) => setRepCustomTone(e.target.value)}
-                placeholder="Describe the tone and style you want..."
-                className="mt-2 w-full text-sm p-2 border border-gray-200 rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-              />
+              <div className="space-y-2">
+                <p className="text-xs text-gray-500">{PERSONALITY_EXAMPLES.Customize.description}</p>
+                <textarea
+                  value={repCustomTone}
+                  onChange={(e) => setRepCustomTone(e.target.value)}
+                  placeholder="Describe the tone and style you want..."
+                  className="w-full text-sm p-2 border border-gray-200 rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                />
+              </div>
             )}
           </div>
 
@@ -712,45 +716,56 @@ function ConfigureAgentSection() {
 }
 
 /* ================================================================
-   MAIN EXPORT — SetupSettings (Settings-only, no wizard)
-   Renders two sections with settingsSection deep-link support
+   MAIN EXPORT — SetupSettings (two-tab layout)
+   Tab 1: Ticketing System | Tab 2: Agent Config
    ================================================================ */
+type SettingsTab = "ticketing" | "agent";
+
 export default function SetupSettings() {
   const { settingsSection, zendeskConnected } = useApp();
-  const agentRef = useRef<HTMLDivElement>(null);
-  const ticketingRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<SettingsTab>(
+    settingsSection === "agent" ? "agent" : "ticketing"
+  );
 
   useEffect(() => {
-    if (settingsSection === "agent" && agentRef.current) {
-      agentRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (settingsSection === "ticketing" && ticketingRef.current) {
-      ticketingRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (settingsSection === "agent") setActiveTab("agent");
+    else if (settingsSection === "ticketing") setActiveTab("ticketing");
   }, [settingsSection]);
 
   return (
-    <div className="space-y-10">
-      {/* Section 1: Ticketing System */}
-      <div ref={ticketingRef}>
-        <div className="flex items-center gap-2 mb-4">
-          <Globe className="w-5 h-5 text-gray-700" />
-          <h2 className="text-lg font-semibold text-gray-900">Ticketing System</h2>
+    <div className="flex flex-col h-full">
+      {/* Tab bar */}
+      <div className="flex items-center gap-1 border-b border-gray-200 mb-6">
+        <button
+          onClick={() => setActiveTab("ticketing")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === "ticketing"
+              ? "border-[#6c47ff] text-[#6c47ff]"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Globe className="w-4 h-4" />
+          Ticketing System
           {zendeskConnected && (
-            <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px] ml-2">Connected</Badge>
+            <span className="w-2 h-2 rounded-full bg-green-500" />
           )}
-        </div>
-        <TicketingSystemSection />
+        </button>
+        <button
+          onClick={() => setActiveTab("agent")}
+          className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-2 ${
+            activeTab === "agent"
+              ? "border-[#6c47ff] text-[#6c47ff]"
+              : "border-transparent text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <Bot className="w-4 h-4" />
+          Agent Config
+        </button>
       </div>
 
-      <div className="border-t border-gray-200" />
-
-      {/* Section 2: Configure Agent */}
-      <div ref={agentRef}>
-        <div className="flex items-center gap-2 mb-4">
-          <Bot className="w-5 h-5 text-gray-700" />
-          <h2 className="text-lg font-semibold text-gray-900">Configure Agent</h2>
-        </div>
-        <ConfigureAgentSection />
+      {/* Tab content */}
+      <div className="flex-1 overflow-y-auto">
+        {activeTab === "ticketing" ? <TicketingSystemSection /> : <ConfigureAgentSection />}
       </div>
     </div>
   );

@@ -203,10 +203,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sopUploaded, setSopUploaded] = useState(false);
   const [extractedRuleNames, setExtractedRuleNames] = useState<string[]>([]);
 
-  /* Rep config — first time: name and personality are empty */
+  /* Rep config — defaults: Ava / Friendly */
   const [repHired, setRepHired] = useState(false);
-  const [hiredRepName, setHiredRepName] = useState("");
-  const [repPersonality, setRepPersonality] = useState<"Friendly" | "Professional" | "Casual" | "Customize" | "">("");
+  const [hiredRepName, setHiredRepName] = useState("Ava");
+  const [repPersonality, setRepPersonality] = useState<"Friendly" | "Professional" | "Casual" | "Customize" | "">("Friendly");
   const [repCustomTone, setRepCustomTone] = useState("");
   const [repPermissions, setRepPermissions] = useState<ActionPermission[]>([
     ...defaultReadActions, ...defaultWriteActions,

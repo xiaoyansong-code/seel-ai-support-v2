@@ -58,7 +58,7 @@ export default function PlaybookPage() {
         ))}
       </div>
 
-      {activeTab === "rules" ? <RulesView /> : <DocumentsView />}
+      {activeTab === "rules" ? <RulesView /> : <DocumentsView onSwitchToRules={() => setActiveTab("rules")} />}
     </div>
   );
 }
@@ -97,9 +97,7 @@ function RulesView() {
               className="h-8 w-[200px] pl-8 text-[12px]"
             />
           </div>
-          <Button size="sm" variant="outline" className="text-[12px] h-8">
-            <Plus size={12} className="mr-1" /> Add Rule
-          </Button>
+
         </div>
       </div>
 
@@ -376,7 +374,7 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
 // ============================================================
 // DOCUMENTS VIEW — with empty state + Try Sample Document
 // ============================================================
-function DocumentsView() {
+function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
   const {
     docsData, addDocument, removeDocument, toggleDocInUse,
     updateDocument, addTopic, setSopUploaded, setExtractedRuleNames,
@@ -431,6 +429,9 @@ function DocumentsView() {
       setSopUploaded(true);
       setExtractedRuleNames(ruleNames);
       setProcessing(false);
+
+      // Redirect to Rules tab after successful extraction
+      onSwitchToRules();
 
       // Create a Team Lead topic for the first import
       const newTopic: Topic = {
