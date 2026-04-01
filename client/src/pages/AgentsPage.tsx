@@ -1,6 +1,6 @@
 /*
  * AgentsPage — Setup Wizard + Normal mode (Team Lead + Rep views)
- * Round 4: Multi-agent extensibility, skip-blocking, Add Agent
+ * Round 5: Team Lead preview/expectation page when setup incomplete
  */
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -11,7 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Send, User, Crown, ChevronDown,
   ThumbsUp, ThumbsDown,
-  Bot, Settings, Plus, AlertTriangle, Globe, FileText,
+  Bot, Settings, Plus, AlertTriangle, Globe,
+  BarChart3, MessageSquare, Lightbulb, TrendingUp, Clock,
+  ArrowRight, CheckCircle2,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
 import SetupSettings from "@/components/SetupSettings";
@@ -145,7 +147,186 @@ function TopicCard({ topic, onAccept, onReject, onReply }: {
   );
 }
 
-/* NORMAL MODE — TEAM LEAD VIEW */
+/* ================================================================
+   TEAM LEAD PREVIEW — shown when setup is incomplete
+   Gives the merchant an expectation of what they'll see once active
+   ================================================================ */
+function TeamLeadPreview() {
+  const { setShowSettings, setSetupStep, zendeskConnected, stepStatuses, hiredRepName } = useApp();
+
+  const setupProgress: { label: string; done: boolean; step: number }[] = [
+    { label: "Connect Zendesk", done: stepStatuses[1] === "complete" || zendeskConnected, step: 1 },
+    { label: "Import Policies", done: stepStatuses[2] === "complete", step: 2 },
+    { label: "Configure Agent", done: stepStatuses[3] === "complete", step: 3 },
+  ];
+
+  const completedCount = setupProgress.filter(s => s.done).length;
+
+  const previewCapabilities = [
+    {
+      icon: BarChart3,
+      title: "Daily Digest",
+      description: "Get a daily summary of ticket volume, resolution rate, CSAT score, and response time trends.",
+      preview: (
+        <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-1.5">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Tickets handled</span>
+            <span className="font-medium text-gray-700">24 <span className="text-green-600 text-[10px]">+8%</span></span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Resolution rate</span>
+            <span className="font-medium text-gray-700">79% <span className="text-green-600 text-[10px]">+2%</span></span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">CSAT</span>
+            <span className="font-medium text-gray-700">4.5/5 <span className="text-green-600 text-[10px]">+0.1</span></span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Avg response</span>
+            <span className="font-medium text-gray-700">38s <span className="text-green-600 text-[10px]">-4s</span></span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: Lightbulb,
+      title: "Rule Proposals",
+      description: "Alex analyzes ticket patterns and proposes new rules or adjustments to existing ones for your approval.",
+      preview: (
+        <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[9px] border-indigo-300 text-indigo-600 bg-indigo-50 h-4 px-1.5">Proposal</Badge>
+            <span className="text-[11px] text-gray-600 truncate">Extend return window for holiday orders</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-600 bg-amber-50 h-4 px-1.5">Anomaly</Badge>
+            <span className="text-[11px] text-gray-600 truncate">Spike in shipping delay complaints</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: TrendingUp,
+      title: "Performance Insights",
+      description: "Track ticket volume trends, CSAT over time, intent analysis, and conversation-level reasoning traces.",
+      preview: (
+        <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+          <div className="flex items-center gap-3 text-xs text-gray-500">
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-400" /> 7-day ticket trend</div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-400" /> CSAT over time</div>
+            <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400" /> Intent breakdown</div>
+          </div>
+        </div>
+      ),
+    },
+    {
+      icon: MessageSquare,
+      title: "Escalation Feed",
+      description: `When ${hiredRepName || "your Rep"} encounters tickets it can't handle, they appear here for human review with full context.`,
+      preview: (
+        <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[9px] border-red-200 text-red-600 bg-red-50 h-4 px-1.5">High</Badge>
+            <span className="text-[11px] text-gray-600 truncate">#12847 — Customer requesting manager callback</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="text-[9px] border-amber-200 text-amber-600 bg-amber-50 h-4 px-1.5">Medium</Badge>
+            <span className="text-[11px] text-gray-600 truncate">#12851 — Complex multi-order return request</span>
+          </div>
+        </div>
+      ),
+    },
+  ];
+
+  return (
+    <div className="flex-1 flex flex-col h-full">
+      {/* Header */}
+      <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}>
+          <Crown size={14} />
+        </div>
+        <div className="flex items-center gap-1">
+          <span className="text-[13px] font-semibold">Alex (Team Lead)</span>
+          <AiBadge />
+          <span className="text-[12px] text-muted-foreground ml-2">Team Lead</span>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        {/* Setup progress card */}
+        <div className="max-w-2xl mx-auto space-y-6">
+          <div className="p-5 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200/60 rounded-xl">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/80 border border-indigo-200/60 flex items-center justify-center shrink-0">
+                <Crown className="w-6 h-6 text-indigo-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Welcome to your AI Support Team</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  Once setup is complete, Alex will provide daily performance digests, analyze ticket patterns, and propose rule improvements. Here's what you can expect.
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex-1 h-1.5 bg-white/60 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(completedCount / 3) * 100}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-medium text-indigo-700">{completedCount}/3 complete</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {setupProgress.map((item) => (
+                    <button
+                      key={item.step}
+                      onClick={() => {
+                        setSetupStep(item.step);
+                        setShowSettings(true);
+                      }}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
+                        item.done
+                          ? "bg-green-100 text-green-700"
+                          : "bg-white text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 border border-gray-200"
+                      )}
+                    >
+                      {item.done ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
+                      {item.label}
+                      {!item.done && <ArrowRight className="w-3 h-3" />}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Capability preview cards */}
+          <div>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">What you'll get after activation</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {previewCapabilities.map((cap) => {
+                const Icon = cap.icon;
+                return (
+                  <div key={cap.title} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                        <Icon className="w-4 h-4 text-indigo-600" />
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-800">{cap.title}</h4>
+                    </div>
+                    <p className="text-xs text-gray-500 leading-relaxed">{cap.description}</p>
+                    {cap.preview}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* NORMAL MODE — TEAM LEAD VIEW (active, with real data) */
 function TeamLeadView() {
   const { topicsData, updateTopic, hiredRepName, agentsData } = useApp();
   const [inputValue, setInputValue] = useState("");
@@ -496,16 +677,13 @@ function RepView({ agentId }: { agentId: string }) {
   );
 }
 
-/* BLOCKED REP VIEW — shown when setup is incomplete */
+/* BLOCKED REP VIEW — shown when Zendesk setup is incomplete */
 function BlockedRepView() {
-  const { stepStatuses, setShowSettings, setSetupStep, zendeskConnected, sopUploaded } = useApp();
+  const { stepStatuses, setShowSettings, setSetupStep, zendeskConnected } = useApp();
 
   const missingItems: { icon: React.ElementType; label: string; step: number }[] = [];
   if (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete")) {
     missingItems.push({ icon: Globe, label: "Connect Zendesk", step: 1 });
-  }
-  if (stepStatuses[2] === "skipped" || (!sopUploaded && stepStatuses[2] !== "complete")) {
-    missingItems.push({ icon: FileText, label: "Import Policies", step: 2 });
   }
 
   return (
@@ -516,7 +694,7 @@ function BlockedRepView() {
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Setup Incomplete</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Your AI Rep can't operate until the following steps are completed:
+          Your AI Rep needs a Zendesk connection to operate. Both Training and Production modes require an active Zendesk seat.
         </p>
         <div className="space-y-2 mb-6">
           {missingItems.map((item) => (
@@ -535,7 +713,7 @@ function BlockedRepView() {
           ))}
         </div>
         <p className="text-xs text-gray-400">
-          Once all required steps are complete, your Rep will be ready to handle tickets.
+          Once Zendesk is connected, your Rep will be ready to handle tickets.
         </p>
       </div>
     </div>
@@ -548,14 +726,17 @@ function NormalView() {
     selectedAgentId, setSelectedAgentId,
     agentsData, hiredRepName,
     setShowSettings,
-    stepStatuses, zendeskConnected, sopUploaded,
+    stepStatuses, zendeskConnected,
   } = useApp();
   const nonLeadAgents = agentsData.filter((a) => !a.isTeamLead);
   const teamLead = agentsData.find((a) => a.id === "team-lead")!;
 
-  /* Determine if rep is blocked */
+  /* Determine if rep is blocked (Zendesk not connected) */
   const zdOk = stepStatuses[1] === "complete" || zendeskConnected;
   const repBlocked = !zdOk;
+
+  /* Determine if Team Lead should show preview (setup not fully done) */
+  const setupFullyDone = zdOk; // Team Lead preview when Zendesk not connected
 
   return (
     <div className="flex-1 flex h-full">
@@ -623,7 +804,7 @@ function NormalView() {
 
       {/* Main content */}
       {selectedAgentId === "team-lead" ? (
-        <TeamLeadView />
+        setupFullyDone ? <TeamLeadView /> : <TeamLeadPreview />
       ) : repBlocked ? (
         <BlockedRepView />
       ) : (

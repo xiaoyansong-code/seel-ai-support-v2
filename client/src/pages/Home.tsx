@@ -1,6 +1,6 @@
 /*
  * Home — Main layout: Sidebar + Header Tabs + Content Area
- * Round 4: Unified SetupSettings for both wizard and settings modes
+ * Round 5: Settings only shows Zendesk + Configure Agent (no Import Policies)
  */
 import { useApp } from "@/contexts/AppContext";
 import Sidebar from "@/components/Sidebar";
@@ -22,21 +22,12 @@ export default function Home() {
   const {
     mainTab, setMainTab, agentMode, setAgentMode,
     showSettings, setShowSettings,
-    setupComplete, stepStatuses,
+    setupComplete, stepStatuses, zendeskConnected,
   } = useApp();
 
-  const skippedSteps = Object.entries(stepStatuses)
-    .filter(([, status]) => status === "skipped")
-    .map(([step]) => {
-      const labels: Record<string, string> = {
-        "1": "Zendesk Connection",
-        "2": "Policy Import",
-        "3": "Agent Configuration",
-      };
-      return labels[step] || `Step ${step}`;
-    });
-
-  const hasSkipped = skippedSteps.length > 0 && setupComplete;
+  /* Only show banner for Zendesk skip (Import is managed in Playbook, not a blocking issue) */
+  const zdSkipped = (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete"));
+  const hasSkipped = zdSkipped && setupComplete;
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -114,12 +105,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Persistent banner for skipped steps */}
+        {/* Persistent banner for skipped Zendesk */}
         {hasSkipped && mainTab === "agents" && agentMode === "normal" && !showSettings && (
           <div className="px-5 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
             <AlertTriangle size={14} className="text-amber-600 shrink-0" />
             <p className="text-[12px] text-amber-800">
-              Some setup steps were skipped: <strong>{skippedSteps.join(", ")}</strong>.
+              Zendesk connection was skipped. Your Rep can't operate without it.
             </p>
             <button
               onClick={() => setShowSettings(true)}
@@ -138,7 +129,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage your AI agent configuration, integrations, and preferences.</p>
+                    <p className="text-sm text-gray-500 mt-1">Manage Zendesk integration and agent configuration.</p>
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}
