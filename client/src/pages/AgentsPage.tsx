@@ -1,6 +1,6 @@
 /*
  * AgentsPage — Setup Wizard + Normal mode (Team Lead + Rep views)
- * Round 5: Team Lead preview/expectation page when setup incomplete
+ * Round 6: Go Live toggle in Rep header (Plan B), status dots on sidebar, Ticketing System rename
  */
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -13,7 +13,7 @@ import {
   ThumbsUp, ThumbsDown,
   Bot, Settings, Plus, AlertTriangle, Globe,
   BarChart3, MessageSquare, Lightbulb, TrendingUp, Clock,
-  ArrowRight, CheckCircle2,
+  ArrowRight, CheckCircle2, Power,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
 import SetupSettings from "@/components/SetupSettings";
@@ -155,7 +155,7 @@ function TeamLeadPreview() {
   const { setShowSettings, setSetupStep, zendeskConnected, stepStatuses, hiredRepName } = useApp();
 
   const setupProgress: { label: string; done: boolean; step: number }[] = [
-    { label: "Connect Zendesk", done: stepStatuses[1] === "complete" || zendeskConnected, step: 1 },
+    { label: "Connect Ticketing System", done: stepStatuses[1] === "complete" || zendeskConnected, step: 1 },
     { label: "Import Policies", done: stepStatuses[2] === "complete", step: 2 },
     { label: "Configure Agent", done: stepStatuses[3] === "complete", step: 3 },
   ];
@@ -222,16 +222,16 @@ function TeamLeadPreview() {
     {
       icon: MessageSquare,
       title: "Escalation Feed",
-      description: `When ${hiredRepName || "your Rep"} encounters tickets it can't handle, they appear here for human review with full context.`,
+      description: `When ${hiredRepName || "your Rep"} encounters tickets it can't handle, they appear here for human review and resolution.`,
       preview: (
         <div className="mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100 space-y-2">
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[9px] border-red-200 text-red-600 bg-red-50 h-4 px-1.5">High</Badge>
-            <span className="text-[11px] text-gray-600 truncate">#12847 — Customer requesting manager callback</span>
+            <Badge variant="outline" className="text-[9px] border-red-200 text-red-600 bg-red-50 h-4 px-1.5">Urgent</Badge>
+            <span className="text-[11px] text-gray-600 truncate">VIP customer requesting manager callback</span>
           </div>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[9px] border-amber-200 text-amber-600 bg-amber-50 h-4 px-1.5">Medium</Badge>
-            <span className="text-[11px] text-gray-600 truncate">#12851 — Complex multi-order return request</span>
+            <Badge variant="outline" className="text-[9px] border-amber-200 text-amber-600 bg-amber-50 h-4 px-1.5">High</Badge>
+            <span className="text-[11px] text-gray-600 truncate">Billing dispute — amount exceeds threshold</span>
           </div>
         </div>
       ),
@@ -239,281 +239,349 @@ function TeamLeadPreview() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col h-full">
-      {/* Header */}
-      <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: "linear-gradient(135deg, #059669, #10b981)" }}>
-          <Crown size={14} />
+    <div className="flex-1 overflow-y-auto p-6">
+      <div className="max-w-2xl mx-auto">
+        {/* Header with setup progress */}
+        <div className="mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-1">Welcome to Your AI Support Dashboard</h2>
+          <p className="text-sm text-gray-500">
+            Here's what you'll see once your AI Rep is active. Complete the setup to unlock these capabilities.
+          </p>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[13px] font-semibold">Alex (Team Lead)</span>
-          <AiBadge />
-          <span className="text-[12px] text-muted-foreground ml-2">Team Lead</span>
+
+        {/* Setup progress */}
+        <div className="p-4 bg-white border border-gray-200 rounded-xl mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-800">Setup Progress</h3>
+            <span className="text-xs text-gray-500">{completedCount} of {setupProgress.length} complete</span>
+          </div>
+          <div className="w-full h-1.5 bg-gray-100 rounded-full mb-3">
+            <div
+              className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+              style={{ width: `${(completedCount / setupProgress.length) * 100}%` }}
+            />
+          </div>
+          <div className="space-y-2">
+            {setupProgress.map((item) => (
+              <button
+                key={item.step}
+                onClick={() => {
+                  setSetupStep(item.step);
+                  setShowSettings(true);
+                }}
+                className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className={cn(
+                  "w-5 h-5 rounded-full flex items-center justify-center text-xs shrink-0",
+                  item.done ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"
+                )}>
+                  {item.done ? <CheckCircle2 className="w-3.5 h-3.5" /> : item.step}
+                </div>
+                <span className={cn("text-sm", item.done ? "text-green-700" : "text-gray-600")}>{item.label}</span>
+                {!item.done && <span className="text-xs text-indigo-600 ml-auto">Complete →</span>}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-6">
-        {/* Setup progress card */}
-        <div className="max-w-2xl mx-auto space-y-6">
-          <div className="p-5 bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-200/60 rounded-xl">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/80 border border-indigo-200/60 flex items-center justify-center shrink-0">
-                <Crown className="w-6 h-6 text-indigo-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-base font-semibold text-gray-900 mb-1">Welcome to your AI Support Team</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  Once setup is complete, Alex will provide daily performance digests, analyze ticket patterns, and propose rule improvements. Here's what you can expect.
-                </p>
-                <div className="mt-3 flex items-center gap-3">
-                  <div className="flex-1 h-1.5 bg-white/60 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                      style={{ width: `${(completedCount / 3) * 100}%` }}
-                    />
+        {/* Preview capabilities */}
+        <div className="mb-4">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">What you'll get</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {previewCapabilities.map((cap) => {
+            const Icon = cap.icon;
+            return (
+              <div key={cap.title} className="p-4 bg-white border border-gray-200 rounded-xl">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                    <Icon className="w-3.5 h-3.5 text-indigo-600" />
                   </div>
-                  <span className="text-xs font-medium text-indigo-700">{completedCount}/3 complete</span>
+                  <h4 className="text-sm font-semibold text-gray-800">{cap.title}</h4>
                 </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {setupProgress.map((item) => (
-                    <button
-                      key={item.step}
-                      onClick={() => {
-                        setSetupStep(item.step);
-                        setShowSettings(true);
-                      }}
-                      className={cn(
-                        "flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors",
-                        item.done
-                          ? "bg-green-100 text-green-700"
-                          : "bg-white text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 border border-gray-200"
-                      )}
-                    >
-                      {item.done ? <CheckCircle2 className="w-3 h-3" /> : <Clock className="w-3 h-3" />}
-                      {item.label}
-                      {!item.done && <ArrowRight className="w-3 h-3" />}
-                    </button>
-                  ))}
+                <p className="text-xs text-gray-500 leading-relaxed">{cap.description}</p>
+                {cap.preview}
+                <div className="mt-2 text-center">
+                  <Badge variant="outline" className="text-[9px] text-gray-400 border-gray-200">Preview</Badge>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Capability preview cards */}
-          <div>
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">What you'll get after activation</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {previewCapabilities.map((cap) => {
-                const Icon = cap.icon;
-                return (
-                  <div key={cap.title} className="p-4 bg-white border border-gray-200 rounded-xl hover:border-gray-300 transition-colors">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-indigo-600" />
-                      </div>
-                      <h4 className="text-sm font-semibold text-gray-800">{cap.title}</h4>
-                    </div>
-                    <p className="text-xs text-gray-500 leading-relaxed">{cap.description}</p>
-                    {cap.preview}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 }
 
-/* NORMAL MODE — TEAM LEAD VIEW (active, with real data) */
+/* ================================================================
+   TEAM LEAD VIEW — full view when setup is complete
+   ================================================================ */
 function TeamLeadView() {
-  const { topicsData, updateTopic, hiredRepName, agentsData } = useApp();
-  const [inputValue, setInputValue] = useState("");
-  const [messages, setMessages] = useState<{ sender: string; text: string; time: string }[]>([]);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const teamLead = agentsData.find((a) => a.id === "team-lead")!;
+  const { topicsData, updateTopic, hiredRepName } = useApp();
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
 
-  useEffect(() => {
-    setMessages([
-      {
-        sender: "team-lead",
-        text: `\ud83d\udcca **Daily Digest \u2014 ${dailyDigest.date}**\n\nHere's how the team performed today:\n\n\u2022 Tickets handled: ${dailyDigest.totalTickets} (${dailyDigest.deltaTickets} vs yesterday)\n\u2022 Resolution rate: ${dailyDigest.resolutionRate} (${dailyDigest.deltaResolution})\n\u2022 CSAT: ${dailyDigest.csatScore} (${dailyDigest.deltaCsat})\n\u2022 Avg first response: ${dailyDigest.avgResponseTime} (${dailyDigest.deltaRt})\n\u2022 Sentiment-changed rate: ${dailyDigest.sentimentChangedRate} (${dailyDigest.deltaSentiment})\n\nI have ${dailyDigest.updateCount} items for your review below.`,
-        time: "Just now",
-      },
-    ]);
-  }, []);
-
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-    }
-  }, [messages]);
-
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    const userMsg = { sender: "user", text: inputValue, time: "Just now" };
-    setMessages((prev) => [...prev, userMsg]);
-    setInputValue("");
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "team-lead",
-          text: "Got it! I'll update the rules accordingly. You can review the changes in the Playbook tab.",
-          time: "Just now",
-        },
-      ]);
-    }, 1000);
+  const handleAccept = (id: string) => {
+    updateTopic(id, { status: "accepted" });
+    toast.success("Proposal accepted and applied to Playbook");
+  };
+  const handleReject = (id: string) => {
+    updateTopic(id, { status: "rejected" });
+    toast("Proposal rejected");
+  };
+  const handleReply = (id: string) => {
+    setReplyTo(replyTo === id ? null : id);
+    setReplyText("");
   };
 
-  const pendingTopics = topicsData.filter((t) => t.status === "pending");
-  const processedTopics = topicsData.filter((t) => t.status !== "pending");
-
   return (
-    <div className="flex-1 flex flex-col h-full">
-      <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: teamLead.color }}>
-          <Crown size={14} />
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-2xl mx-auto px-5 py-5 space-y-6">
+        {/* Daily Digest */}
+        <div className="bg-white border border-border rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+              <BarChart3 className="w-3.5 h-3.5 text-green-600" />
+            </div>
+            <div>
+              <h3 className="text-[13px] font-semibold">Daily Digest</h3>
+              <p className="text-[10px] text-muted-foreground">{dailyDigest.date}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: "Tickets", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets },
+              { label: "Resolution", value: dailyDigest.resolutionRate, trend: dailyDigest.deltaResolution },
+              { label: "CSAT", value: dailyDigest.csatScore, trend: dailyDigest.deltaCsat },
+              { label: "Avg Response", value: dailyDigest.avgResponseTime, trend: dailyDigest.deltaRt },
+            ].map((stat) => (
+              <div key={stat.label} className="text-center p-2 bg-[#fafafa] rounded-lg">
+                <p className="text-[16px] font-bold text-foreground">{stat.value}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{stat.label}</p>
+                <p className={cn(
+                  "text-[10px] font-medium mt-0.5",
+                  stat.trend.startsWith("+") ? "text-green-600" : stat.trend.startsWith("-") ? "text-green-600" : "text-gray-500"
+                )}>{stat.trend}</p>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1">
-          <span className="text-[13px] font-semibold">Alex (Team Lead)</span>
-          <AiBadge />
-          <span className="text-[12px] text-muted-foreground ml-2">Team Lead</span>
-        </div>
-      </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-        {messages.map((msg, i) => {
-          const isUser = msg.sender === "user";
-          return (
-            <div key={i} className={cn("flex gap-3 items-start", isUser && "flex-row-reverse")}>
-              {isUser ? (
-                <div className="w-8 h-8 rounded-full bg-[#e5e7eb] flex items-center justify-center text-[#6d7175] shrink-0">
-                  <User size={14} />
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: teamLead.color }}>
-                  <Crown size={12} />
-                </div>
-              )}
-              <div className={cn(
-                "max-w-[560px] rounded-xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-wrap",
-                isUser ? "bg-[#6c47ff] text-white rounded-tr-sm" : "bg-[#fffbf0] border border-[#f5e6c8] rounded-tl-sm text-foreground"
-              )}>
-                {!isUser && (
-                  <div className="flex items-center gap-1 mb-1 -mt-0.5">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Alex (Team Lead)</span>
-                    <AiBadge />
+        {/* Topics / Proposals */}
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+              <Lightbulb className="w-3.5 h-3.5 text-indigo-600" />
+            </div>
+            <h3 className="text-[13px] font-semibold">Topics & Proposals</h3>
+            <Badge variant="secondary" className="text-[10px] h-5">
+              {topicsData.filter((t) => t.status === "pending").length} pending
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            {topicsData.map((topic) => (
+              <div key={topic.id}>
+                <TopicCard
+                  topic={topic}
+                  onAccept={() => handleAccept(topic.id)}
+                  onReject={() => handleReject(topic.id)}
+                  onReply={() => handleReply(topic.id)}
+                />
+                {replyTo === topic.id && (
+                  <div className="mt-1 ml-6 flex gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <input
+                      type="text"
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Type feedback for Alex..."
+                      className="flex-1 h-8 px-3 rounded-lg border border-border bg-white text-[12px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
+                      autoFocus
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9]"
+                      onClick={() => {
+                        if (replyText.trim()) {
+                          toast.success("Feedback sent to Alex");
+                          setReplyTo(null);
+                          setReplyText("");
+                        }
+                      }}
+                    >
+                      Send
+                    </Button>
                   </div>
                 )}
-                <RichText text={msg.text} />
               </div>
-            </div>
-          );
-        })}
-
-        {(pendingTopics.length > 0 || processedTopics.length > 0) && (
-          <div className="space-y-2 ml-11 max-w-[600px]">
-            {pendingTopics.length > 0 && (
-              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                Pending Review ({pendingTopics.length})
-              </p>
-            )}
-            {pendingTopics.map((topic) => (
-              <TopicCard
-                key={topic.id}
-                topic={topic}
-                onAccept={() => updateTopic(topic.id, { status: "accepted" })}
-                onReject={() => updateTopic(topic.id, { status: "rejected" })}
-                onReply={() => toast.info("Reply feature coming soon")}
-              />
             ))}
-
-            {processedTopics.length > 0 && (
-              <>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-4 mb-1">
-                  Processed ({processedTopics.length})
-                </p>
-                {processedTopics.map((topic) => (
-                  <TopicCard
-                    key={topic.id}
-                    topic={topic}
-                    onAccept={() => {}}
-                    onReject={() => {}}
-                    onReply={() => {}}
-                  />
-                ))}
-              </>
-            )}
           </div>
-        )}
-      </div>
-
-      {/* Chat Input */}
-      <div className="px-5 py-3 border-t border-border bg-white">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            placeholder="Message Alex (Team Lead)..."
-            className="flex-1 h-9 px-3 rounded-lg border border-border bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
-          />
-          <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9]" onClick={handleSend}>
-            <Send size={14} />
-          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-/* NORMAL MODE — REP VIEW */
+/* ================================================================
+   REP VIEW — conversation + escalation feed for a specific Rep
+   Round 6: Go Live status badge + toggle in header (Plan B)
+   ================================================================ */
 function RepView({ agentId }: { agentId: string }) {
-  const { agentsData, hiredRepName } = useApp();
+  const {
+    agentsData, hiredRepName,
+    goLiveMode, setGoLiveMode,
+    zendeskConnected, stepStatuses,
+    setShowSettings,
+  } = useApp();
+  const agent = agentsData.find((a) => a.id === agentId)!;
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedEscalation, setSelectedEscalation] = useState<string | null>(null);
-  const [inputValue, setInputValue] = useState("");
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
+  const [inputValue, setInputValue] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [showModeDropdown, setShowModeDropdown] = useState(false);
 
-  const agent = agentsData.find((a) => a.id === agentId)!;
   const needsAttention = escalationFeed.filter((e) => e.status === "needs_attention");
   const resolved = escalationFeed.filter((e) => e.status === "resolved");
   const selectedCard = escalationFeed.find((e) => e.id === selectedEscalation);
 
+  const zdOk = stepStatuses[1] === "complete" || zendeskConnected;
+
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [chatMessages]);
 
   const handleSendChat = () => {
     if (!inputValue.trim()) return;
-    setChatMessages((prev) => [...prev, { sender: "user", text: inputValue }]);
+    const userMsg = inputValue.trim();
+    setChatMessages((prev) => [...prev, { sender: "user", text: userMsg }]);
     setInputValue("");
     setTimeout(() => {
       setChatMessages((prev) => [
         ...prev,
-        { sender: "rep", text: "I'll look into that right away. Let me check the customer's order history and get back to you with a recommendation." },
+        { sender: "agent", text: `I've noted your feedback: "${userMsg}". I'll adjust my approach accordingly. Is there anything else you'd like me to focus on?` },
       ]);
     }, 800);
   };
 
+  /* Mode badge colors */
+  const modeConfig = {
+    training: { label: "Training", color: "bg-blue-100 text-blue-700 border-blue-200", dot: "bg-blue-500" },
+    production: { label: "Production", color: "bg-green-100 text-green-700 border-green-200", dot: "bg-green-500" },
+    off: { label: "Off", color: "bg-gray-100 text-gray-500 border-gray-200", dot: "bg-gray-400" },
+  };
+  const currentMode = modeConfig[goLiveMode];
+
+  const handleModeChange = (mode: "training" | "production" | "off") => {
+    if ((mode === "training" || mode === "production") && !zdOk) {
+      toast.error("Ticketing system connection required to activate this mode.");
+      return;
+    }
+    setGoLiveMode(mode);
+    setShowModeDropdown(false);
+    if (mode === "off") {
+      toast(`${hiredRepName} is now offline.`);
+    } else if (mode === "training") {
+      toast.success(`${hiredRepName} is now in Training mode. Responses will be written as internal notes.`);
+    } else {
+      toast.success(`${hiredRepName} is now in Production mode. Responding to customers directly.`);
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full">
-      {/* Header */}
+      {/* Header with Go Live toggle (Plan B) */}
       <div className="px-5 py-3 border-b border-border flex items-center gap-3 bg-white">
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ background: agent.color }}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold relative" style={{ background: agent.color }}>
           {agent.initials}
+          {/* Status dot */}
+          <span className={cn("absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white", currentMode.dot)} />
         </div>
         <div className="flex items-center gap-1 flex-1">
           <span className="text-[13px] font-semibold">{hiredRepName}</span>
           <AiBadge />
           <span className="text-[12px] text-muted-foreground ml-2">AI Support Rep</span>
         </div>
+
+        {/* Go Live Mode — status badge + dropdown */}
+        <div className="relative">
+          <button
+            onClick={() => setShowModeDropdown(!showModeDropdown)}
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs font-medium transition-colors",
+              currentMode.color
+            )}
+          >
+            <div className={cn("w-2 h-2 rounded-full", currentMode.dot)} />
+            {currentMode.label}
+            <ChevronDown className="w-3 h-3 ml-0.5" />
+          </button>
+
+          {showModeDropdown && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowModeDropdown(false)} />
+              <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+                <div className="p-2 space-y-0.5">
+                  <button
+                    onClick={() => handleModeChange("production")}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
+                      goLiveMode === "production" ? "bg-green-50 text-green-700" : "hover:bg-gray-50 text-gray-700",
+                      !zdOk && "opacity-50 cursor-not-allowed"
+                    )}
+                    disabled={!zdOk}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                    <div className="flex-1">
+                      <p className="font-medium">Production</p>
+                      <p className="text-[10px] text-gray-500">Responds to customers directly</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleModeChange("training")}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
+                      goLiveMode === "training" ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50 text-gray-700",
+                      !zdOk && "opacity-50 cursor-not-allowed"
+                    )}
+                    disabled={!zdOk}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-blue-500" />
+                    <div className="flex-1">
+                      <p className="font-medium">Training</p>
+                      <p className="text-[10px] text-gray-500">Writes internal notes only</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => handleModeChange("off")}
+                    className={cn(
+                      "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
+                      goLiveMode === "off" ? "bg-gray-100 text-gray-600" : "hover:bg-gray-50 text-gray-700"
+                    )}
+                  >
+                    <div className="w-2 h-2 rounded-full bg-gray-400" />
+                    <div className="flex-1">
+                      <p className="font-medium">Off</p>
+                      <p className="text-[10px] text-gray-500">Agent is inactive</p>
+                    </div>
+                  </button>
+                </div>
+                {!zdOk && (
+                  <div className="px-3 py-2 border-t border-gray-100 bg-amber-50">
+                    <p className="text-[10px] text-amber-700">
+                      Ticketing system connection required for Training and Production modes.
+                      <button onClick={() => { setShowModeDropdown(false); setShowSettings(true); }} className="text-indigo-600 font-medium ml-1 hover:underline">
+                        Complete setup →
+                      </button>
+                    </p>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
         <Button
           size="sm"
           variant="outline"
@@ -683,7 +751,7 @@ function BlockedRepView() {
 
   const missingItems: { icon: React.ElementType; label: string; step: number }[] = [];
   if (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete")) {
-    missingItems.push({ icon: Globe, label: "Connect Zendesk", step: 1 });
+    missingItems.push({ icon: Globe, label: "Connect Ticketing System", step: 1 });
   }
 
   return (
@@ -694,7 +762,7 @@ function BlockedRepView() {
         </div>
         <h3 className="text-lg font-semibold text-gray-900 mb-2">Setup Incomplete</h3>
         <p className="text-sm text-gray-500 mb-4">
-          Your AI Rep needs a Zendesk connection to operate. Both Training and Production modes require an active Zendesk seat.
+          Your AI Rep needs a ticketing system connection to operate. Both Training and Production modes require an active connection.
         </p>
         <div className="space-y-2 mb-6">
           {missingItems.map((item) => (
@@ -713,7 +781,7 @@ function BlockedRepView() {
           ))}
         </div>
         <p className="text-xs text-gray-400">
-          Once Zendesk is connected, your Rep will be ready to handle tickets.
+          Once the ticketing system is connected, your Rep will be ready to handle tickets.
         </p>
       </div>
     </div>
@@ -727,6 +795,7 @@ function NormalView() {
     agentsData, hiredRepName,
     setShowSettings,
     stepStatuses, zendeskConnected,
+    goLiveMode,
   } = useApp();
   const nonLeadAgents = agentsData.filter((a) => !a.isTeamLead);
   const teamLead = agentsData.find((a) => a.id === "team-lead")!;
@@ -737,6 +806,9 @@ function NormalView() {
 
   /* Determine if Team Lead should show preview (setup not fully done) */
   const setupFullyDone = zdOk; // Team Lead preview when Zendesk not connected
+
+  /* Status dot color for sidebar */
+  const modeDotColor = repBlocked ? "bg-amber-400" : goLiveMode === "production" ? "bg-green-500" : goLiveMode === "training" ? "bg-blue-500" : "bg-gray-400";
 
   return (
     <div className="flex-1 flex h-full">
@@ -768,16 +840,18 @@ function NormalView() {
                 repBlocked && "opacity-50"
               )}
               style={{ background: agent.color }}
-              title={`${hiredRepName}${repBlocked ? " (Setup incomplete)" : ""}`}
+              title={`${hiredRepName}${repBlocked ? " (Setup incomplete)" : ` (${goLiveMode})`}`}
             >
               {agent.initials}
+              {/* Status dot on avatar */}
+              <span className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white",
+                modeDotColor
+              )} />
               {repBlocked && (
                 <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center">
                   <AlertTriangle size={7} className="text-white" />
                 </span>
-              )}
-              {!repBlocked && escalationFeed.filter((e) => e.status === "needs_attention").length > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
               )}
             </button>
           ))}

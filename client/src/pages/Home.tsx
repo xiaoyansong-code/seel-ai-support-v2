@@ -1,6 +1,6 @@
 /*
  * Home — Main layout: Sidebar + Header Tabs + Content Area
- * Round 5: Settings only shows Zendesk + Configure Agent (no Import Policies)
+ * Round 6: Ticketing System rename, playbookDeepLink support
  */
 import { useApp } from "@/contexts/AppContext";
 import Sidebar from "@/components/Sidebar";
@@ -23,11 +23,22 @@ export default function Home() {
     mainTab, setMainTab, agentMode, setAgentMode,
     showSettings, setShowSettings,
     setupComplete, stepStatuses, zendeskConnected,
+    playbookDeepLink, setPlaybookDeepLink,
   } = useApp();
 
   /* Only show banner for Zendesk skip (Import is managed in Playbook, not a blocking issue) */
   const zdSkipped = (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete"));
   const hasSkipped = zdSkipped && setupComplete;
+
+  /* Handle tab switch — consume playbookDeepLink */
+  const handleTabSwitch = (tabId: typeof mainTab) => {
+    setMainTab(tabId);
+    if (showSettings) setShowSettings(false);
+    // Clear deep link when navigating away from playbook
+    if (tabId !== "playbook" && playbookDeepLink) {
+      setPlaybookDeepLink(null);
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -44,10 +55,7 @@ export default function Home() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => {
-                    setMainTab(tab.id);
-                    if (showSettings) setShowSettings(false);
-                  }}
+                  onClick={() => handleTabSwitch(tab.id)}
                   className={cn(
                     "px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-[1px]",
                     mainTab === tab.id && !showSettings
@@ -105,12 +113,12 @@ export default function Home() {
           </div>
         )}
 
-        {/* Persistent banner for skipped Zendesk */}
+        {/* Persistent banner for skipped Ticketing System */}
         {hasSkipped && mainTab === "agents" && agentMode === "normal" && !showSettings && (
           <div className="px-5 py-2 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
             <AlertTriangle size={14} className="text-amber-600 shrink-0" />
             <p className="text-[12px] text-amber-800">
-              Zendesk connection was skipped. Your Rep can't operate without it.
+              Ticketing system connection was skipped. Your Rep can't operate without it.
             </p>
             <button
               onClick={() => setShowSettings(true)}
@@ -129,7 +137,7 @@ export default function Home() {
                 <div className="flex items-center justify-between mb-6">
                   <div>
                     <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
-                    <p className="text-sm text-gray-500 mt-1">Manage Zendesk integration and agent configuration.</p>
+                    <p className="text-sm text-gray-500 mt-1">Manage ticketing system integration and agent configuration.</p>
                   </div>
                   <button
                     onClick={() => setShowSettings(false)}

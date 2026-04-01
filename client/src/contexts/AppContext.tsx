@@ -17,7 +17,7 @@ import {
 type MainTab = "agents" | "playbook" | "performance";
 type AgentMode = "setup" | "normal";
 type StepStatus = "pending" | "complete" | "skipped";
-type GoLiveMode = "training" | "production";
+type GoLiveMode = "training" | "production" | "off";
 
 /* ── Zendesk sub-step state machine ── */
 type ZdAuthStatus = "idle" | "loading" | "success" | "error";
@@ -28,39 +28,33 @@ interface ZendeskState {
   subdomain: string;
   authStatus: ZdAuthStatus;
   authError: string;
-  // Seat
   seatStatus: ZdSeatStatus;
   seatError: string;
   selectedSeat: string;
   availableSeats: { id: string; name: string; email: string }[];
-  // Trigger / Routing
   triggerStatus: ZdTriggerStatus;
   triggerError: string;
 }
 
-/* ── Channel / Handoff config (now on Agent side) ── */
+/* ── Channel / Handoff config ── */
 interface ChannelConfig {
   email: boolean;
   liveChat: boolean;
   sms: boolean;
 }
 
+/* Handoff is now per-channel. For MVP we only have email channel handoff. */
 interface HandoffConfig {
-  method: "group" | "seat" | "email" | "tag";
-  // Group-based
+  /* Assign to Group */
   selectedGroup: string;
   availableGroups: string[];
-  // Seat-based (assign to specific person)
+  /* Assign to Person */
   selectedHandoffSeat: string;
   availableHandoffSeats: { id: string; name: string; email: string }[];
-  // Email-based
-  handoffEmail: string;
-  emailCc: string;
-  emailTemplate: "default" | "detailed" | "minimal";
-  // Tag-based
+  /* Add Tag */
   handoffTag: string;
   autoSetPriority: boolean;
-  // Priority
+  /* Priority */
   priority: "normal" | "high" | "urgent";
 }
 
@@ -72,7 +66,7 @@ interface AppState {
   agentMode: AgentMode;
   setAgentMode: (mode: AgentMode) => void;
 
-  /* 3-step wizard: 1=Zendesk, 2=Import, 3=Configure+GoLive */
+  /* 3-step wizard */
   setupStep: number;
   setSetupStep: (step: number) => void;
   setupComplete: boolean;
@@ -89,7 +83,7 @@ interface AppState {
   channels: ChannelConfig;
   setChannels: (updates: Partial<ChannelConfig>) => void;
 
-  /* Handoff config */
+  /* Handoff config (per-channel, MVP: email channel) */
   handoff: HandoffConfig;
   setHandoff: (updates: Partial<HandoffConfig>) => void;
 
@@ -113,6 +107,14 @@ interface AppState {
   goLiveMode: GoLiveMode;
   setGoLiveMode: (m: GoLiveMode) => void;
 
+  /* New: Disclose AI identity */
+  discloseAI: boolean;
+  setDiscloseAI: (v: boolean) => void;
+
+  /* New: Email sign-off */
+  emailSignoff: string;
+  setEmailSignoff: (s: string) => void;
+
   /* Settings/Setup unified view */
   showSettings: boolean;
   setShowSettings: (v: boolean) => void;
@@ -122,6 +124,10 @@ interface AppState {
   /* Agent selection (Normal mode) */
   selectedAgentId: string;
   setSelectedAgentId: (id: string) => void;
+
+  /* Playbook deep-link: when set, switches to Playbook tab and opens this sub-tab */
+  playbookDeepLink: string | null;
+  setPlaybookDeepLink: (tab: string | null) => void;
 
   /* Data collections */
   agentsData: Agent[];
@@ -158,7 +164,6 @@ const defaultZendesk: ZendeskState = {
 const defaultChannels: ChannelConfig = { email: true, liveChat: false, sms: false };
 
 const defaultHandoff: HandoffConfig = {
-  method: "group",
   selectedGroup: "",
   availableGroups: ["Tier 2 Support", "Escalations", "VIP Team", "Billing", "Returns"],
   selectedHandoffSeat: "",
@@ -168,9 +173,6 @@ const defaultHandoff: HandoffConfig = {
     { id: "hs-3", name: "Emily Davis", email: "emily@company.com" },
     { id: "hs-4", name: "James Wilson", email: "james@company.com" },
   ],
-  handoffEmail: "",
-  emailCc: "",
-  emailTemplate: "default",
   handoffTag: "",
   autoSetPriority: false,
   priority: "normal",
@@ -180,7 +182,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [mainTab, setMainTab] = useState<MainTab>("agents");
   const [agentMode, setAgentMode] = useState<AgentMode>("setup");
 
-  /* 3 steps: 1=Zendesk, 2=Import Policies, 3=Configure Agent + Go Live */
   const [setupStep, setSetupStep] = useState(1);
   const [setupComplete, setSetupComplete] = useState(false);
   const [stepStatuses, setStepStatuses] = useState<Record<number, StepStatus>>({
@@ -222,7 +223,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [repPermissions, setRepPermissions] = useState<ActionPermission[]>([
     ...defaultReadActions, ...defaultWriteActions,
   ]);
-  const [goLiveMode, setGoLiveMode] = useState<GoLiveMode>("training");
+  const [goLiveMode, setGoLiveMode] = useState<GoLiveMode>("off");
+
+  /* New states */
+  const [discloseAI, setDiscloseAI] = useState(true);
+  const [emailSignoff, setEmailSignoff] = useState("Best regards,\nThe Support Team");
+
+  /* Playbook deep-link */
+  const [playbookDeepLink, setPlaybookDeepLink] = useState<string | null>(null);
 
   /* Data */
   const [agentsData, setAgentsData] = useState<Agent[]>(defaultAgents);
@@ -280,9 +288,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
         repCustomTone, setRepCustomTone,
         repPermissions, setRepPermissions,
         goLiveMode, setGoLiveMode,
+        discloseAI, setDiscloseAI,
+        emailSignoff, setEmailSignoff,
         showSettings, setShowSettings,
         settingsSection, setSettingsSection,
         selectedAgentId, setSelectedAgentId,
+        playbookDeepLink, setPlaybookDeepLink,
         agentsData, updateAgent,
         rulesData, updateRule, toggleRule,
         topicsData, updateTopic,

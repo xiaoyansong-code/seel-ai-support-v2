@@ -10,11 +10,11 @@ import {
   Globe, Upload, FileText, Link2, Sparkles, Bot,
   Shield, ArrowRight, ArrowLeft, ExternalLink, Mail,
   MessageSquare, Smartphone, Tag, Users, UserCheck, AlertCircle, Info,
-  Zap, ChevronDown, HelpCircle, Eye, EyeOff,
+  ChevronDown, HelpCircle, Eye, EyeOff, Plus, Pen,
 } from "lucide-react";
 
 /* ================================================================
-   TOOLTIP — lightweight hover tooltip for permission descriptions
+   TOOLTIP — lightweight hover tooltip
    ================================================================ */
 function Tooltip({ text, children }: { text: string; children: React.ReactNode }) {
   const [show, setShow] = useState(false);
@@ -32,18 +32,38 @@ function Tooltip({ text, children }: { text: string; children: React.ReactNode }
 }
 
 /* ================================================================
+   PERSONALITY EXAMPLES — static sample messages per personality
+   ================================================================ */
+const PERSONALITY_EXAMPLES: Record<string, { description: string; sample: string }> = {
+  Friendly: {
+    description: "Warm, empathetic, uses casual language and emoji occasionally.",
+    sample: "Hey there! 😊 I totally understand how frustrating that must be. Let me look into your order right away and get this sorted out for you!",
+  },
+  Professional: {
+    description: "Formal, precise, maintains a business-appropriate tone.",
+    sample: "Thank you for reaching out. I understand your concern regarding the order. Allow me to review the details and provide you with an update shortly.",
+  },
+  Casual: {
+    description: "Relaxed, conversational, like chatting with a friend.",
+    sample: "No worries at all! Let me pull up your order real quick — we'll get this figured out in no time.",
+  },
+  Customize: {
+    description: "Define your own tone and style guidelines.",
+    sample: "",
+  },
+};
+
+/* ================================================================
    STEPPER — left rail
-   In wizard mode: 3 steps (Zendesk, Import, Configure)
-   In settings mode: 2 steps only (Zendesk, Configure) — no Import
    ================================================================ */
 const WIZARD_STEPS = [
-  { id: 1, label: "Connect Zendesk", icon: Globe },
+  { id: 1, label: "Ticketing System", icon: Globe },
   { id: 2, label: "Import Policies", icon: FileText },
   { id: 3, label: "Configure Agent", icon: Bot },
 ];
 
 const SETTINGS_STEPS = [
-  { id: 1, label: "Connect Zendesk", icon: Globe },
+  { id: 1, label: "Ticketing System", icon: Globe },
   { id: 3, label: "Configure Agent", icon: Bot },
 ];
 
@@ -103,11 +123,9 @@ function Stepper({ current, statuses, onSelect, isWizard }: {
 }
 
 /* ================================================================
-   STEP 1 — Connect Zendesk
-   Wizard mode: step-by-step reveal, single CTA per step, auto-advance
-   Settings mode: vertical layout, all sections visible, no flow buttons
+   STEP 1 — Connect Ticketing System (Zendesk)
    ================================================================ */
-function ZendeskStep({ isWizard }: { isWizard: boolean }) {
+function TicketingSystemStep({ isWizard }: { isWizard: boolean }) {
   const {
     zendesk, setZendesk, zendeskConnected,
     stepStatuses, setStepStatus, setSetupStep,
@@ -115,7 +133,6 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
 
   const [demoBranch, setDemoBranch] = useState<"success" | "error">("success");
 
-  // Determine which sub-step we're on (only relevant for wizard)
   const currentSubStep = useMemo(() => {
     if (zendesk.triggerStatus === "verified") return 3;
     if (zendesk.seatStatus === "verified") return 3;
@@ -123,7 +140,6 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
     return 1;
   }, [zendesk.authStatus, zendesk.seatStatus, zendesk.triggerStatus]);
 
-  /* Sub-step 1: Authorize */
   const handleAuthorize = () => {
     if (!zendesk.subdomain.trim()) {
       setZendesk({ authError: "Please enter your Zendesk subdomain" });
@@ -150,7 +166,6 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
     }, 1500);
   };
 
-  /* Sub-step 2: Bind seat */
   const handleBindSeat = () => {
     if (!zendesk.selectedSeat) {
       setZendesk({ seatError: "Please select an agent seat" });
@@ -164,13 +179,12 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
       } else {
         setZendesk({
           seatStatus: "error",
-          seatError: "This seat does not have the required permissions. The agent seat needs 'Tickets: Read/Write' and 'Users: Read' permissions.",
+          seatError: "This seat does not have the required permissions.",
         });
       }
     }, 1200);
   };
 
-  /* Sub-step 3: Verify connection */
   const handleVerifyConnection = () => {
     setZendesk({ triggerStatus: "loading", triggerError: "" });
     setTimeout(() => {
@@ -179,7 +193,7 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
         if (isWizard) {
           setStepStatus(1, "complete");
           setSetupStep(2);
-          toast.success("Zendesk connection verified! Moving to next step.");
+          toast.success("Connection verified! Moving to next step.");
         } else {
           toast.success("Connection verified");
         }
@@ -209,8 +223,10 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
   };
 
   const allDone = zendesk.authStatus === "success" && zendesk.seatStatus === "verified" && zendesk.triggerStatus === "verified";
+  const showStep1 = !isWizard || currentSubStep >= 1;
+  const showStep2 = !isWizard || currentSubStep >= 2;
+  const showStep3 = !isWizard || currentSubStep >= 3;
 
-  /* ── Status indicator for each sub-step ── */
   function SubStepStatus({ done }: { done: boolean }) {
     return done ? (
       <div className="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center shrink-0">
@@ -219,24 +235,29 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
     ) : null;
   }
 
-  /* In wizard mode, show steps sequentially. In settings mode, show all. */
-  const showStep1 = !isWizard || currentSubStep >= 1;
-  const showStep2 = !isWizard || currentSubStep >= 2;
-  const showStep3 = !isWizard || currentSubStep >= 3;
-
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-gray-900">Connect Zendesk</h2>
+        <h2 className="text-lg font-semibold text-gray-900">
+          {isWizard ? "Connect Ticketing System" : "Ticketing System"}
+        </h2>
         <p className="text-sm text-gray-500 mt-1">
           {isWizard
-            ? "Set up Zendesk AI Support Access so your AI Rep can read and respond to tickets."
-            : "Manage your Zendesk integration and connection settings."
+            ? "Connect your ticketing system so your AI Rep can read and respond to tickets."
+            : "Manage your ticketing system integration and connection settings."
           }
         </p>
       </div>
 
-      {/* Unified setup guide link */}
+      {/* Integration note */}
+      <div className="flex items-center gap-2 p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
+        <Info className="w-4 h-4 text-gray-400 shrink-0" />
+        <p className="text-xs text-gray-600 flex-1">
+          Currently supports <strong>Zendesk</strong> integration. More ticketing systems coming soon.
+        </p>
+      </div>
+
+      {/* Setup guide link */}
       <div className="flex items-center gap-2 p-2.5 bg-blue-50 border border-blue-200 rounded-lg">
         <Info className="w-4 h-4 text-blue-500 shrink-0" />
         <p className="text-xs text-blue-700 flex-1">
@@ -254,194 +275,119 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
         <button onClick={() => setDemoBranch("error")} className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${demoBranch === "error" ? "bg-red-100 text-red-700" : "text-gray-500 hover:bg-gray-100"}`}>Error Path</button>
       </div>
 
-      {/* ── Sub-step 1: Authorize API ── */}
-      {showStep1 && (
-        <div className={`p-4 rounded-lg border space-y-3 transition-all ${
-          zendesk.authStatus === "success"
-            ? "border-green-200 bg-green-50/30"
-            : "border-gray-200 bg-gray-50"
-        }`}>
-          <div className="flex items-center justify-between">
+      {/* Vertical sub-steps */}
+      <div className="space-y-4">
+        {/* Sub-step 1: Authorize API */}
+        {showStep1 && (
+          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.authStatus === "success" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
             <div className="flex items-center gap-2">
-              {isWizard && <span className="text-xs font-semibold text-gray-400 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center">1</span>}
+              <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">1</span>
               <h3 className="text-sm font-semibold text-gray-800">Authorize Zendesk API</h3>
+              <SubStepStatus done={zendesk.authStatus === "success"} />
             </div>
-            <SubStepStatus done={zendesk.authStatus === "success"} />
-          </div>
-
-          {zendesk.authStatus !== "success" ? (
-            <>
-              <p className="text-xs text-gray-500">
-                Enter your Zendesk subdomain to authorize API access.
-                <span className="font-mono ml-1 text-gray-600">https://<strong>your-subdomain</strong>.zendesk.com</span>
-              </p>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500">https://</span>
-                <Input
-                  value={zendesk.subdomain}
-                  onChange={(e) => setZendesk({ subdomain: e.target.value, authError: "" })}
-                  placeholder="your-subdomain"
-                  className="max-w-xs font-mono text-sm"
-                />
-                <span className="text-sm text-gray-500">.zendesk.com</span>
-              </div>
-              {zendesk.authStatus === "error" && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-red-700">{zendesk.authError}</p>
+            <p className="text-xs text-gray-500 ml-7">
+              Enter your Zendesk subdomain to authorize API access. <code className="text-[11px] bg-gray-100 px-1 py-0.5 rounded">https://<strong>your-subdomain</strong>.zendesk.com</code>
+            </p>
+            {zendesk.authStatus !== "success" && (
+              <div className="ml-7 space-y-2">
+                <div className="flex items-center gap-1.5 max-w-md">
+                  <span className="text-xs text-gray-500 shrink-0">https://</span>
+                  <Input
+                    value={zendesk.subdomain}
+                    onChange={(e) => setZendesk({ subdomain: e.target.value, authError: "" })}
+                    placeholder="your-subdomain"
+                    className="text-sm flex-1"
+                  />
+                  <span className="text-xs text-gray-500 shrink-0">.zendesk.com</span>
                 </div>
-              )}
-              <Button
-                size="sm"
-                onClick={handleAuthorize}
-                disabled={zendesk.authStatus === "loading"}
-              >
-                {zendesk.authStatus === "loading" ? (
-                  <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Connecting...</>
-                ) : "Connect"}
-              </Button>
-            </>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-green-700">
-              <Check className="w-3.5 h-3.5" />
-              <span>Connected to <strong>{zendesk.subdomain}.zendesk.com</strong></span>
-              {!isWizard && (
-                <button
-                  onClick={() => setZendesk({ authStatus: "idle", seatStatus: "idle", triggerStatus: "idle", selectedSeat: "" })}
-                  className="text-xs text-gray-500 hover:text-gray-700 underline ml-2"
-                >
-                  Reconnect
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Sub-step 2: Bind Agent Seat ── */}
-      {showStep2 && (
-        <div className={`p-4 rounded-lg border space-y-3 transition-all ${
-          zendesk.seatStatus === "verified"
-            ? "border-green-200 bg-green-50/30"
-            : zendesk.authStatus === "success"
-              ? "border-gray-200 bg-gray-50"
-              : "border-gray-100 bg-gray-50/50 opacity-50"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isWizard && <span className="text-xs font-semibold text-gray-400 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center">2</span>}
-              <h3 className="text-sm font-semibold text-gray-800">Bind Agent Seat</h3>
-            </div>
-            <SubStepStatus done={zendesk.seatStatus === "verified"} />
+                {zendesk.authError && <p className="text-xs text-red-600">{zendesk.authError}</p>}
+                <Button size="sm" onClick={handleAuthorize} disabled={zendesk.authStatus === "loading"}>
+                  {zendesk.authStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Connecting...</> : "Connect"}
+                </Button>
+              </div>
+            )}
+            {zendesk.authStatus === "success" && (
+              <p className="text-xs text-green-700 ml-7">Connected to <strong>{zendesk.subdomain}.zendesk.com</strong></p>
+            )}
           </div>
+        )}
 
-          {zendesk.seatStatus !== "verified" ? (
-            <>
-              <p className="text-xs text-gray-500">
-                Select which Zendesk agent seat your AI Rep will use to read and write tickets.
-              </p>
-              <div className="flex items-center gap-2">
+        {/* Sub-step 2: Bind Agent Seat */}
+        {showStep2 && (
+          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.seatStatus === "verified" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">2</span>
+              <h3 className="text-sm font-semibold text-gray-800">Bind Agent Seat</h3>
+              <SubStepStatus done={zendesk.seatStatus === "verified"} />
+            </div>
+            <p className="text-xs text-gray-500 ml-7">Select which Zendesk agent seat the AI Rep will use.</p>
+            <div className="ml-7 space-y-2">
+              <div className="flex items-center gap-2 max-w-sm">
                 <select
                   value={zendesk.selectedSeat}
                   onChange={(e) => setZendesk({ selectedSeat: e.target.value, seatError: "" })}
-                  className="flex-1 max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  className="flex-1 h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
+                  disabled={zendesk.seatStatus === "verified"}
                 >
                   <option value="">Select an agent seat...</option>
                   {zendesk.availableSeats.map((seat) => (
                     <option key={seat.id} value={seat.id}>{seat.name} ({seat.email})</option>
                   ))}
                 </select>
-                <button
-                  onClick={handleRefreshSeats}
-                  className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition-colors"
-                  title="Refresh seat list"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${zendesk.seatStatus === "loading" ? "animate-spin" : ""}`} />
+                <button onClick={handleRefreshSeats} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors" title="Refresh seats">
+                  <RefreshCw className={`w-3.5 h-3.5 text-gray-500 ${zendesk.seatStatus === "loading" ? "animate-spin" : ""}`} />
                 </button>
               </div>
-              {zendesk.seatError && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-red-700">{zendesk.seatError}</p>
-                </div>
+              {zendesk.seatError && <p className="text-xs text-red-600">{zendesk.seatError}</p>}
+              {zendesk.seatStatus !== "verified" && (
+                <Button size="sm" onClick={handleBindSeat} disabled={zendesk.seatStatus === "loading" || !zendesk.selectedSeat}>
+                  {zendesk.seatStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Binding...</> : "Bind Seat"}
+                </Button>
               )}
-              <Button size="sm" onClick={handleBindSeat} disabled={zendesk.seatStatus === "loading" || !zendesk.selectedSeat}>
-                {zendesk.seatStatus === "loading" ? (
-                  <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Verifying...</>
-                ) : "Bind Seat"}
-              </Button>
-            </>
-          ) : (
-            <div className="flex items-center gap-2 text-xs text-green-700">
-              <Check className="w-3.5 h-3.5" />
-              <span>Bound to <strong>{zendesk.availableSeats.find(s => s.id === zendesk.selectedSeat)?.name || zendesk.selectedSeat}</strong></span>
-              {!isWizard && (
-                <button
-                  onClick={() => setZendesk({ seatStatus: "idle", triggerStatus: "idle" })}
-                  className="text-xs text-gray-500 hover:text-gray-700 underline ml-2"
-                >
-                  Change
-                </button>
+              {zendesk.seatStatus === "verified" && (
+                <p className="text-xs text-green-700">Seat bound: <strong>{zendesk.availableSeats.find(s => s.id === zendesk.selectedSeat)?.name}</strong></p>
               )}
             </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Sub-step 3: Verify Connection ── */}
-      {showStep3 && (
-        <div className={`p-4 rounded-lg border space-y-3 transition-all ${
-          zendesk.triggerStatus === "verified"
-            ? "border-green-200 bg-green-50/30"
-            : zendesk.seatStatus === "verified"
-              ? "border-gray-200 bg-gray-50"
-              : "border-gray-100 bg-gray-50/50 opacity-50"
-        }`}>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {isWizard && <span className="text-xs font-semibold text-gray-400 bg-gray-100 rounded-full w-5 h-5 flex items-center justify-center">3</span>}
-              <h3 className="text-sm font-semibold text-gray-800">Verify Connection</h3>
-            </div>
-            <SubStepStatus done={zendesk.triggerStatus === "verified"} />
           </div>
+        )}
 
-          {zendesk.triggerStatus !== "verified" ? (
-            <>
-              <p className="text-xs text-gray-500">
-                Assign a test ticket to <strong>{zendesk.availableSeats.find(s => s.id === zendesk.selectedSeat)?.name || "your AI Agent"}</strong> in your Zendesk dashboard, then click Verify to confirm we can receive it.
-              </p>
-              <div className="flex items-center gap-2">
-                <a href="#" className="text-xs text-indigo-600 hover:underline flex items-center gap-1">
-                  Open Zendesk Dashboard <ExternalLink className="w-3 h-3" />
-                </a>
-              </div>
-              {zendesk.triggerStatus === "error" && (
-                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
-                  <p className="text-xs text-red-700">{zendesk.triggerError}</p>
-                </div>
-              )}
-              <Button size="sm" onClick={handleVerifyConnection} disabled={zendesk.triggerStatus === "loading"}>
-                {zendesk.triggerStatus === "loading" ? (
-                  <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Checking...</>
-                ) : "Verify"}
-              </Button>
-            </>
-          ) : (
-            <div className="text-xs text-green-700 space-y-1">
-              <div className="flex items-center gap-2">
-                <Check className="w-3.5 h-3.5" />
-                <span>Connection verified — test ticket received successfully</span>
-              </div>
-              <p className="text-gray-500 ml-5">Ticket #12847 — "Test ticket for AI agent setup"</p>
+        {/* Sub-step 3: Verify Connection */}
+        {showStep3 && (
+          <div className={`rounded-lg border p-4 space-y-3 ${zendesk.triggerStatus === "verified" && !isWizard ? "border-green-200 bg-green-50/30" : "border-gray-200"}`}>
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-600">3</span>
+              <h3 className="text-sm font-semibold text-gray-800">Verify Connection</h3>
+              <SubStepStatus done={zendesk.triggerStatus === "verified"} />
             </div>
-          )}
+            <p className="text-xs text-gray-500 ml-7">
+              Assign a test ticket to <strong>{zendesk.availableSeats.find(s => s.id === zendesk.selectedSeat)?.name || "the AI Agent"}</strong> in your Zendesk dashboard, then click Verify below.
+            </p>
+            <div className="ml-7 space-y-2">
+              {zendesk.triggerError && <p className="text-xs text-red-600">{zendesk.triggerError}</p>}
+              {zendesk.triggerStatus !== "verified" && (
+                <Button size="sm" onClick={handleVerifyConnection} disabled={zendesk.triggerStatus === "loading"}>
+                  {zendesk.triggerStatus === "loading" ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> Waiting for ticket...</> : "Verify"}
+                </Button>
+              )}
+              {zendesk.triggerStatus === "verified" && (
+                <p className="text-xs text-green-700">Connection verified — tickets are being received.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* All done summary */}
+      {allDone && !isWizard && (
+        <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+          <Check className="w-4 h-4 text-green-600 shrink-0" />
+          <p className="text-xs text-green-700 font-medium">Zendesk integration is fully connected and verified.</p>
         </div>
       )}
 
       {/* Footer — wizard only */}
-      {isWizard && (
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+      {isWizard && !allDone && (
+        <div className="flex items-center pt-4 border-t border-gray-200">
           <button
             onClick={() => {
               setStepStatus(1, "skipped");
@@ -451,7 +397,15 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
           >
             Skip for now
           </button>
-          <div />
+        </div>
+      )}
+
+      {/* Settings mode: save button */}
+      {!isWizard && (
+        <div className="flex justify-end pt-4 border-t border-gray-200">
+          <Button size="sm" onClick={() => toast.success("Ticketing system settings saved")}>
+            Save Changes
+          </Button>
         </div>
       )}
     </div>
@@ -461,17 +415,18 @@ function ZendeskStep({ isWizard }: { isWizard: boolean }) {
 /* ================================================================
    STEP 2 — Import Policies (wizard only)
    ================================================================ */
-function ImportPoliciesStep({ isWizard }: { isWizard: boolean }) {
+function ImportPoliciesStep() {
   const {
     sopUploaded, setSopUploaded,
     extractedRuleNames, setExtractedRuleNames,
     stepStatuses, setStepStatus, setSetupStep,
+    setMainTab, setPlaybookDeepLink,
   } = useApp();
 
   const [uploading, setUploading] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [demoBranch, setDemoBranch] = useState<"no-conflict" | "with-conflict">("no-conflict");
-  const [conflicts, setConflicts] = useState<{ id: string; question: string; optionA: string; optionB: string; choice?: string; resolved: boolean }[]>([]);
+  const [conflicts, setConflicts] = useState<{ id: string; question: string; optionA: string; optionB: string; choice: string | null; resolved: boolean }[]>([]);
 
   const handleUpload = () => {
     setUploading(true);
@@ -480,23 +435,22 @@ function ImportPoliciesStep({ isWizard }: { isWizard: boolean }) {
       setSopUploaded(true);
       setExtractedRuleNames([
         "30-day return policy for unused items",
-        "Free return shipping for defective products",
-        "Refund to original payment method within 5-7 business days",
-        "Exchange available for different size/color",
-        "Gift card purchases are final sale",
+        "Free shipping on orders over $50",
+        "Seel protection claim within 30 days of delivery",
+        "Auto-refund for items lost in transit",
+        "VIP customers get priority escalation",
       ]);
       if (demoBranch === "with-conflict") {
         setConflicts([
-          { id: "c1", question: "Your SOP says '30-day returns' but an existing rule says '14-day returns'. Which should apply?", optionA: "Use 30-day return window (from uploaded SOP)", optionB: "Keep 14-day return window (existing rule)", resolved: false },
-          { id: "c2", question: "Should refunds include original shipping costs?", optionA: "Yes, refund shipping costs for all returns", optionB: "No, only refund product cost", resolved: false },
+          { id: "c1", question: "Conflicting return windows found:", optionA: "30-day return window (from SOP document)", optionB: "14-day return window (from existing rules)", choice: null, resolved: false },
         ]);
       }
-      toast.success("Documents analyzed successfully");
+      toast.success("Documents analyzed — 5 rules extracted");
     }, 2000);
   };
 
   const resolveConflict = (id: string, choice: string) => {
-    setConflicts((prev) => prev.map((c) => c.id === id ? { ...c, choice, resolved: true } : c));
+    setConflicts(prev => prev.map(c => c.id === id ? { ...c, choice, resolved: choice !== "later" } : c));
   };
 
   const allConflictsResolved = conflicts.every((c) => c.resolved);
@@ -504,6 +458,11 @@ function ImportPoliciesStep({ isWizard }: { isWizard: boolean }) {
   const handleContinue = () => {
     setStepStatus(2, sopUploaded ? "complete" : "skipped");
     setSetupStep(3);
+  };
+
+  const goToPlaybook = () => {
+    setPlaybookDeepLink("documents");
+    setMainTab("playbook");
   };
 
   return (
@@ -582,18 +541,22 @@ function ImportPoliciesStep({ isWizard }: { isWizard: boolean }) {
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-green-600 mt-3 flex items-center gap-1">
-              <Info className="w-3 h-3" />
-              You can review and edit these rules in Playbook after setup.
-            </p>
           </div>
 
-          {/* Playbook hint */}
+          {/* Playbook hint with link */}
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2">
             <Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" />
             <div className="text-xs text-blue-700">
               <p className="font-medium">After setup, manage your knowledge base in Playbook</p>
-              <p className="mt-0.5">You can upload additional documents, edit rules, and manage your knowledge base from the <strong>Playbook → Documents</strong> tab.</p>
+              <p className="mt-0.5">
+                You can upload additional documents, edit rules, and manage your knowledge base from the Playbook → Documents tab.
+              </p>
+              <button
+                onClick={goToPlaybook}
+                className="mt-1.5 text-blue-600 font-medium hover:underline flex items-center gap-1"
+              >
+                Go to Playbook → Documents <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
           </div>
 
@@ -638,39 +601,39 @@ function ImportPoliciesStep({ isWizard }: { isWizard: boolean }) {
         </div>
       )}
 
-      {/* Footer — wizard only */}
-      {isWizard && (
-        <div className="flex items-center justify-between pt-4 border-t border-gray-200">
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setSetupStep(1)}>
-              <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
-            </Button>
-            <button
-              onClick={() => {
-                setStepStatus(2, "skipped");
-                setSetupStep(3);
-              }}
-              className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              Skip for now
-            </button>
-          </div>
-          <Button
-            onClick={handleContinue}
-            size="sm"
-            disabled={conflicts.length > 0 && !allConflictsResolved && sopUploaded}
-          >
-            Continue <ChevronRight className="w-3.5 h-3.5 ml-1" />
+      {/* Footer */}
+      <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" onClick={() => setSetupStep(1)}>
+            <ArrowLeft className="w-3.5 h-3.5 mr-1" /> Back
           </Button>
+          <button
+            onClick={() => {
+              setStepStatus(2, "skipped");
+              setSetupStep(3);
+            }}
+            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            Skip for now
+          </button>
         </div>
-      )}
+        <Button
+          onClick={handleContinue}
+          size="sm"
+          disabled={conflicts.length > 0 && !allConflictsResolved && sopUploaded}
+        >
+          Continue <ChevronRight className="w-3.5 h-3.5 ml-1" />
+        </Button>
+      </div>
     </div>
   );
 }
 
 /* ================================================================
    STEP 3 — Configure Agent
-   Identity, Permissions (grouped), Channels, Escalation Handoff (flat), Go Live
+   Flat layout (no outer collapsibles): Identity, Permissions, Channels, Handoff, Email
+   Go Live Mode REMOVED from here — now in Rep header (Plan B)
+   Multi-agent secondary nav at top
    ================================================================ */
 function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
   const {
@@ -679,29 +642,33 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
     repPersonality, setRepPersonality,
     repCustomTone, setRepCustomTone,
     repPermissions, setRepPermissions,
-    goLiveMode, setGoLiveMode,
     channels, setChannels,
     handoff, setHandoff,
+    discloseAI, setDiscloseAI,
+    emailSignoff, setEmailSignoff,
     zendeskConnected,
     stepStatuses, setStepStatus, setSetupStep,
     setSetupComplete, setAgentMode,
+    agentsData,
   } = useApp();
 
-  const [showProdConfirm, setShowProdConfirm] = useState(false);
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    identity: true, permissions: true, channels: true, handoff: true, golive: true,
-  });
   const [showReadActions, setShowReadActions] = useState(false);
   const [expandedPermGroups, setExpandedPermGroups] = useState<Record<string, boolean>>({});
-
-  const toggleSection = (key: string) => {
-    setExpandedSections(prev => ({ ...prev, [key]: !prev[key] }));
-  };
 
   const readPerms = repPermissions.filter((p) => p.type === "read");
   const writePerms = repPermissions.filter((p) => p.type === "write");
 
-  /* Group write permissions by domain */
+  /* Group permissions by domain */
+  const readGroups = useMemo(() => {
+    const groups: Record<string, typeof readPerms> = {};
+    readPerms.forEach((p) => {
+      const key = p.domain || "Other";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(p);
+    });
+    return groups;
+  }, [readPerms]);
+
   const writeGroups = useMemo(() => {
     const groups: Record<string, typeof writePerms> = {};
     writePerms.forEach((p) => {
@@ -719,7 +686,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
   };
 
   const canGoLive = zendeskConnected;
-  const zdSkipped = stepStatuses[1] === "skipped" || !zendeskConnected;
+  const nonLeadAgents = agentsData.filter(a => !a.isTeamLead);
 
   const handleComplete = () => {
     if (!hiredRepName.trim()) {
@@ -727,485 +694,361 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
       return;
     }
     if (isWizard && !canGoLive) {
-      // Save config only — don't activate
       setRepHired(false);
       setStepStatus(3, "complete");
       setSetupComplete(true);
       setAgentMode("normal");
-      toast.success(`Configuration saved. Complete Zendesk setup to activate ${hiredRepName}.`);
+      toast.success(`Configuration saved. Complete ticketing system setup to activate ${hiredRepName}.`);
     } else {
       setRepHired(true);
       setStepStatus(3, "complete");
       setSetupComplete(true);
       setAgentMode("normal");
-      toast.success(`${hiredRepName} is now live in ${goLiveMode} mode!`);
+      toast.success(`${hiredRepName} configuration saved!`);
     }
   };
 
-  /* Collapsible section header */
-  function SectionHeader({ id, icon: Icon, title }: { id: string; icon: React.ElementType; title: string }) {
+  /* ── Permission row ── */
+  function PermRow({ perm }: { perm: typeof readPerms[0] }) {
     return (
-      <button
-        onClick={() => toggleSection(id)}
-        className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-t-lg border border-gray-200 hover:bg-gray-100 transition-colors"
-      >
+      <div className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0">
         <div className="flex items-center gap-2">
-          <Icon className="w-4 h-4 text-gray-600" />
-          <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+          <span className="text-sm text-gray-800">{perm.label}</span>
+          {perm.locked && <Badge variant="outline" className="text-[9px] h-4 px-1 text-gray-400 border-gray-300">Always on</Badge>}
+          <Tooltip text={perm.description + (perm.guardrail ? ` (Guardrail: ${perm.guardrail})` : "")}>
+            <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help" />
+          </Tooltip>
         </div>
-        <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${expandedSections[id] ? "" : "-rotate-90"}`} />
-      </button>
+        <Switch checked={perm.enabled} onCheckedChange={() => togglePerm(perm.name)} disabled={perm.locked} />
+      </div>
+    );
+  }
+
+  /* ── Permission group ── */
+  function PermGroup({ domain, perms }: { domain: string; perms: typeof readPerms }) {
+    const enabledCount = perms.filter(p => p.enabled).length;
+    const isExpanded = expandedPermGroups[domain] ?? true;
+    return (
+      <div className="rounded-lg border border-gray-200 overflow-hidden">
+        <button
+          onClick={() => setExpandedPermGroups(prev => ({ ...prev, [domain]: !isExpanded }))}
+          className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors"
+        >
+          <span className="text-xs font-semibold text-gray-700">{domain}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-400">{enabledCount} of {perms.length} enabled</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
+          </div>
+        </button>
+        {isExpanded && (
+          <div className="border-t border-gray-100">
+            {perms.map((perm) => <PermRow key={perm.name} perm={perm} />)}
+          </div>
+        )}
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-gray-900">Configure Agent</h2>
         <p className="text-sm text-gray-500 mt-1">
           {isWizard
-            ? "Set up your AI Rep's identity, permissions, channels, escalation rules, and go-live mode."
+            ? "Set up your AI Rep's identity, permissions, channels, and escalation rules."
             : "Manage your AI Rep's configuration and behavior."
           }
         </p>
       </div>
 
-      {/* ── Identity ── */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
-        <SectionHeader id="identity" icon={Bot} title="Identity" />
-        {expandedSections.identity && (
-          <div className="p-4 border-x border-b border-gray-200 space-y-3">
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-1 block">Rep Name</label>
-              <Input
-                value={hiredRepName}
-                onChange={(e) => setHiredRepName(e.target.value)}
-                placeholder="e.g., Ava"
-                className="max-w-xs text-sm"
-                maxLength={20}
-              />
+      {/* ── Multi-agent secondary nav ── */}
+      <div className="flex items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-lg">
+        {nonLeadAgents.map((agent) => (
+          <button
+            key={agent.id}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-sm font-medium"
+          >
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold" style={{ background: agent.color }}>
+              {agent.initials}
             </div>
-            <div>
-              <label className="text-xs font-medium text-gray-700 mb-2 block">Personality</label>
-              <div className="flex gap-2 flex-wrap">
-                {(["Friendly", "Professional", "Casual", "Customize"] as const).map((p) => (
+            {hiredRepName || agent.name}
+          </button>
+        ))}
+        <button
+          onClick={() => toast.info("Add Agent — Create additional AI Reps with different configurations. Coming in the next release.")}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-400 text-sm hover:border-indigo-300 hover:text-indigo-500 transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" /> Add Agent
+        </button>
+      </div>
+
+      {/* ── Identity — flat, no collapsible ── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Bot className="w-4 h-4 text-gray-600" />
+          <h3 className="text-sm font-semibold text-gray-800">Identity</h3>
+        </div>
+
+        <div className="ml-6 space-y-4">
+          {/* Rep Name */}
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-1 block">Rep Name</label>
+            <Input
+              value={hiredRepName}
+              onChange={(e) => setHiredRepName(e.target.value)}
+              placeholder="e.g., Ava"
+              className="max-w-xs text-sm"
+              maxLength={20}
+            />
+          </div>
+
+          {/* Personality with examples */}
+          <div>
+            <label className="text-xs font-medium text-gray-700 mb-2 block">Personality</label>
+            <div className="space-y-2">
+              {(["Friendly", "Professional", "Casual", "Customize"] as const).map((p) => {
+                const example = PERSONALITY_EXAMPLES[p];
+                const isSelected = repPersonality === p;
+                return (
                   <button
                     key={p}
                     onClick={() => setRepPersonality(p)}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                      repPersonality === p
-                        ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                      isSelected
+                        ? "border-indigo-300 bg-indigo-50"
+                        : "border-gray-200 hover:border-gray-300"
                     }`}
                   >
-                    {p}
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-sm font-medium ${isSelected ? "text-indigo-700" : "text-gray-700"}`}>{p}</span>
+                    </div>
+                    <p className="text-xs text-gray-500">{example.description}</p>
+                    {example.sample && (
+                      <div className="mt-2 p-2 bg-white rounded border border-gray-100 text-xs text-gray-600 italic">
+                        "{example.sample}"
+                      </div>
+                    )}
                   </button>
+                );
+              })}
+            </div>
+            {repPersonality === "Customize" && (
+              <textarea
+                value={repCustomTone}
+                onChange={(e) => setRepCustomTone(e.target.value)}
+                placeholder="Describe the tone and style you want..."
+                className="mt-2 w-full text-sm p-2 border border-gray-200 rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              />
+            )}
+          </div>
+
+          {/* Disclose AI */}
+          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Disclose AI Identity</p>
+              <p className="text-xs text-gray-500 mt-0.5">Let customers know they're interacting with an AI assistant.</p>
+            </div>
+            <Switch checked={discloseAI} onCheckedChange={setDiscloseAI} />
+          </div>
+        </div>
+      </div>
+
+      <div className="border-t border-gray-100" />
+
+      {/* ── Action Permissions — flat, no outer collapsible ── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Shield className="w-4 h-4 text-gray-600" />
+          <h3 className="text-sm font-semibold text-gray-800">Action Permissions</h3>
+        </div>
+
+        <div className="ml-6 space-y-4">
+          {/* READ ACTIONS — grouped by domain, default all on, collapsible */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Read Actions</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">{readPerms.filter(p => p.enabled).length} of {readPerms.length} enabled</span>
+                <button
+                  onClick={() => setShowReadActions(!showReadActions)}
+                  className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 transition-colors"
+                >
+                  {showReadActions ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  {showReadActions ? "Hide" : "Show"}
+                </button>
+              </div>
+            </div>
+            {!showReadActions && (
+              <p className="text-xs text-gray-400 italic">All read actions are enabled by default. Click "Show" to view and adjust.</p>
+            )}
+            {showReadActions && (
+              <div className="space-y-2">
+                {Object.entries(readGroups).map(([domain, perms]) => (
+                  <PermGroup key={domain} domain={domain} perms={perms} />
                 ))}
               </div>
-              {repPersonality === "Customize" && (
-                <textarea
-                  value={repCustomTone}
-                  onChange={(e) => setRepCustomTone(e.target.value)}
-                  placeholder="Describe the tone and style you want..."
-                  className="mt-2 w-full max-w-md text-sm p-2 border border-gray-200 rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-                />
-              )}
+            )}
+          </div>
+
+          {/* WRITE ACTIONS — grouped by domain */}
+          <div>
+            <p className="text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider">Read & Write Actions</p>
+            <div className="space-y-2">
+              {Object.entries(writeGroups).map(([domain, perms]) => (
+                <PermGroup key={domain} domain={domain} perms={perms} />
+              ))}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* ── Permissions — Read / Read & Write with subcategories ── */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
-        <SectionHeader id="permissions" icon={Shield} title="Action Permissions" />
-        {expandedSections.permissions && (
-          <div className="p-4 border-x border-b border-gray-200 space-y-4">
+      <div className="border-t border-gray-100" />
 
-            {/* READ ACTIONS — collapsible, default all on */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Read Actions</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] text-gray-400">{readPerms.filter(p => p.enabled).length} of {readPerms.length} enabled</span>
-                  <button
-                    onClick={() => setShowReadActions(!showReadActions)}
-                    className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-700 transition-colors"
-                  >
-                    {showReadActions ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                    {showReadActions ? "Hide" : "Show"}
-                  </button>
-                </div>
-              </div>
-              {!showReadActions && (
-                <p className="text-xs text-gray-400 italic">All read actions are enabled by default. Click "Show" to view and adjust.</p>
-              )}
-              {showReadActions && (
-                <div className="space-y-1.5">
-                  {readPerms.map((perm) => (
-                    <div key={perm.name} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-gray-100 hover:border-gray-200 transition-colors">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-800">{perm.label}</span>
-                        <Tooltip text={perm.description}>
-                          <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help" />
-                        </Tooltip>
-                      </div>
-                      <Switch checked={perm.enabled} onCheckedChange={() => togglePerm(perm.name)} disabled={perm.locked} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* ── Channels with per-channel handoff ── */}
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="w-4 h-4 text-gray-600" />
+          <h3 className="text-sm font-semibold text-gray-800">Channels & Escalation</h3>
+        </div>
 
-            {/* WRITE ACTIONS — grouped by domain/subcategory */}
-            <div>
-              <p className="text-xs font-medium text-gray-600 mb-2 uppercase tracking-wider">Read & Write Actions</p>
-              <div className="space-y-2">
-                {Object.entries(writeGroups).map(([domain, perms]) => {
-                  const enabledCount = perms.filter(p => p.enabled).length;
-                  const isExpanded = expandedPermGroups[domain] ?? true;
-                  return (
-                    <div key={domain} className="rounded-lg border border-gray-200 overflow-hidden">
-                      <button
-                        onClick={() => setExpandedPermGroups(prev => ({ ...prev, [domain]: !isExpanded }))}
-                        className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-gray-100 transition-colors"
-                      >
-                        <span className="text-xs font-semibold text-gray-700">{domain}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] text-gray-400">{enabledCount} of {perms.length} enabled</span>
-                          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
-                        </div>
-                      </button>
-                      {isExpanded && (
-                        <div className="border-t border-gray-100">
-                          {perms.map((perm) => (
-                            <div key={perm.name} className="flex items-center justify-between py-2 px-3 hover:bg-gray-50 transition-colors border-b border-gray-50 last:border-b-0">
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm text-gray-800">{perm.label}</span>
-                                {perm.locked && <Badge variant="outline" className="text-[9px] h-4 px-1 text-gray-400 border-gray-300">Always on</Badge>}
-                                <Tooltip text={perm.description + (perm.guardrail ? ` (Guardrail: ${perm.guardrail})` : "")}>
-                                  <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-gray-500 cursor-help" />
-                                </Tooltip>
-                              </div>
-                              <Switch checked={perm.enabled} onCheckedChange={() => togglePerm(perm.name)} disabled={perm.locked} />
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Channels ── */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
-        <SectionHeader id="channels" icon={MessageSquare} title="Channels" />
-        {expandedSections.channels && (
-          <div className="p-4 border-x border-b border-gray-200 space-y-3">
-            <p className="text-xs text-gray-500">Choose which channels this AI Rep will handle.</p>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200">
-                <div className="flex items-center gap-2">
-                  <Mail className="w-4 h-4 text-gray-600" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Email</p>
-                    <p className="text-xs text-gray-500">Handle email tickets</p>
-                  </div>
-                </div>
-                <Switch checked={channels.email} onCheckedChange={(v) => setChannels({ email: v })} />
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 opacity-60">
-                <div className="flex items-center gap-2">
-                  <MessageSquare className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">Live Chat</p>
-                    <p className="text-xs text-gray-400">Handle live chat conversations</p>
-                  </div>
-                </div>
-                <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">Coming soon</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 opacity-60">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">SMS</p>
-                    <p className="text-xs text-gray-400">Handle SMS messages</p>
-                  </div>
-                </div>
-                <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">Coming soon</Badge>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Escalation Handoff — FLAT LAYOUT (no tabs) ── */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
-        <SectionHeader id="handoff" icon={UserCheck} title="Escalation Handoff" />
-        {expandedSections.handoff && (
-          <div className="p-4 border-x border-b border-gray-200 space-y-5">
-            <p className="text-xs text-gray-500">
-              Configure how escalated tickets are handled. You can enable multiple methods simultaneously.
-            </p>
-
-            {/* Assign to Group */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-gray-600" />
-                <h4 className="text-sm font-semibold text-gray-800">Assign to Group</h4>
-              </div>
-              <p className="text-xs text-gray-400 ml-6">Escalated tickets will be reassigned to this Zendesk group.</p>
-              <div className="ml-6">
-                <select
-                  value={handoff.selectedGroup}
-                  onChange={(e) => setHandoff({ selectedGroup: e.target.value })}
-                  className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
-                >
-                  <option value="">Select a group...</option>
-                  {handoff.availableGroups.map((group) => (
-                    <option key={group} value={group}>{group}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100" />
-
-            {/* Assign to Person */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-gray-600" />
-                <h4 className="text-sm font-semibold text-gray-800">Assign to Person</h4>
-              </div>
-              <p className="text-xs text-gray-400 ml-6">Escalated tickets will be assigned to a specific team member.</p>
-              <div className="ml-6">
-                <select
-                  value={handoff.selectedHandoffSeat}
-                  onChange={(e) => setHandoff({ selectedHandoffSeat: e.target.value })}
-                  className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
-                >
-                  <option value="">Select a team member...</option>
-                  {handoff.availableHandoffSeats.map((seat) => (
-                    <option key={seat.id} value={seat.id}>{seat.name} ({seat.email})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100" />
-
-            {/* Notify via Email */}
-            <div className="space-y-2">
+        <div className="ml-6 space-y-4">
+          {/* Email Channel */}
+          <div className="rounded-lg border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between p-3 bg-gray-50">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-gray-600" />
-                <h4 className="text-sm font-semibold text-gray-800">Notify via Email</h4>
+                <div>
+                  <p className="text-sm font-medium text-gray-800">Email</p>
+                  <p className="text-xs text-gray-500">Handle email tickets</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-400 ml-6">Send email notifications when a ticket is escalated.</p>
-              <div className="ml-6 space-y-3">
+              <Switch checked={channels.email} onCheckedChange={(v) => setChannels({ email: v })} />
+            </div>
+
+            {channels.email && (
+              <div className="p-4 border-t border-gray-200 space-y-4">
+                {/* Email Sign-off */}
                 <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Notification Email</label>
-                  <Input
-                    value={handoff.handoffEmail}
-                    onChange={(e) => setHandoff({ handoffEmail: e.target.value })}
-                    placeholder="escalations@yourcompany.com"
-                    type="email"
-                    className="max-w-sm text-sm"
+                  <label className="text-xs font-medium text-gray-700 mb-1 block">Sending Sign-off</label>
+                  <p className="text-xs text-gray-400 mb-2">The closing signature appended to every email reply.</p>
+                  <textarea
+                    value={emailSignoff}
+                    onChange={(e) => setEmailSignoff(e.target.value)}
+                    className="w-full max-w-md text-sm p-2 border border-gray-200 rounded-lg resize-none h-16 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    placeholder="Best regards,\nThe Support Team"
                   />
                 </div>
+
+                <div className="border-t border-gray-100" />
+
+                {/* Escalation Handoff for Email */}
                 <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">CC (optional)</label>
-                  <Input
-                    value={handoff.emailCc}
-                    onChange={(e) => setHandoff({ emailCc: e.target.value })}
-                    placeholder="manager@company.com, team-lead@company.com"
-                    type="text"
-                    className="max-w-sm text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-700 mb-2 block">Email Template</label>
-                  <div className="flex gap-2">
-                    {([
-                      { value: "default" as const, label: "Default", desc: "Ticket summary + customer info" },
-                      { value: "detailed" as const, label: "Detailed", desc: "Full conversation + AI reasoning" },
-                      { value: "minimal" as const, label: "Minimal", desc: "Ticket ID + reason only" },
-                    ]).map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={() => setHandoff({ emailTemplate: t.value })}
-                        className={`flex-1 p-2.5 rounded-lg border text-left transition-colors ${
-                          handoff.emailTemplate === t.value
-                            ? "border-indigo-300 bg-indigo-50"
-                            : "border-gray-200 hover:border-gray-300"
-                        }`}
-                      >
-                        <p className={`text-xs font-medium ${handoff.emailTemplate === t.value ? "text-indigo-700" : "text-gray-700"}`}>{t.label}</p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">{t.desc}</p>
-                      </button>
-                    ))}
+                  <p className="text-xs font-medium text-gray-600 uppercase tracking-wider mb-3">Escalation Handoff</p>
+                  <p className="text-xs text-gray-400 mb-4">Configure how escalated email tickets are handled.</p>
+
+                  {/* Assign to Group */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-3.5 h-3.5 text-gray-500" />
+                      <h4 className="text-xs font-semibold text-gray-700">Assign to Group</h4>
+                    </div>
+                    <select
+                      value={handoff.selectedGroup}
+                      onChange={(e) => setHandoff({ selectedGroup: e.target.value })}
+                      className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="">Select a group...</option>
+                      {handoff.availableGroups.map((group) => (
+                        <option key={group} value={group}>{group}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
-              </div>
-            </div>
 
-            <div className="border-t border-gray-100" />
+                  <div className="border-t border-gray-100 my-3" />
 
-            {/* Add Tag */}
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Tag className="w-4 h-4 text-gray-600" />
-                <h4 className="text-sm font-semibold text-gray-800">Add Tag</h4>
-              </div>
-              <p className="text-xs text-gray-400 ml-6">Add a tag to escalated tickets for filtering in Zendesk Views.</p>
-              <div className="ml-6 space-y-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-700 mb-1 block">Escalation Tag</label>
-                  <Input
-                    value={handoff.handoffTag}
-                    onChange={(e) => setHandoff({ handoffTag: e.target.value })}
-                    placeholder="seel_escalated"
-                    className="max-w-sm text-sm font-mono"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 max-w-sm">
-                  <div>
-                    <p className="text-sm text-gray-800">Auto-set priority on escalation</p>
-                    <p className="text-xs text-gray-500">Automatically set ticket priority when tag is applied.</p>
+                  {/* Assign to Person */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2">
+                      <UserCheck className="w-3.5 h-3.5 text-gray-500" />
+                      <h4 className="text-xs font-semibold text-gray-700">Assign to Person</h4>
+                    </div>
+                    <select
+                      value={handoff.selectedHandoffSeat}
+                      onChange={(e) => setHandoff({ selectedHandoffSeat: e.target.value })}
+                      className="w-full max-w-sm h-9 px-3 rounded-lg border border-gray-200 bg-white text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                    >
+                      <option value="">Select a team member...</option>
+                      {handoff.availableHandoffSeats.map((seat) => (
+                        <option key={seat.id} value={seat.id}>{seat.name} ({seat.email})</option>
+                      ))}
+                    </select>
                   </div>
-                  <Switch
-                    checked={handoff.autoSetPriority}
-                    onCheckedChange={(v) => setHandoff({ autoSetPriority: v })}
-                  />
-                </div>
-              </div>
-            </div>
 
-            <div className="border-t border-gray-100" />
+                  <div className="border-t border-gray-100 my-3" />
 
-            {/* Priority — shared */}
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-gray-700 block">Default Escalation Priority</label>
-              <p className="text-xs text-gray-400">Default priority level for escalated tickets in Zendesk.</p>
-              <div className="flex gap-2">
-                {(["normal", "high", "urgent"] as const).map((p) => (
-                  <button
-                    key={p}
-                    onClick={() => setHandoff({ priority: p })}
-                    className={`px-3 py-1.5 rounded-lg border text-xs font-medium capitalize transition-colors ${
-                      handoff.priority === p
-                        ? "border-indigo-300 bg-indigo-50 text-indigo-700"
-                        : "border-gray-200 text-gray-600 hover:border-gray-300"
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── Go Live Mode ── */}
-      <div className="rounded-lg border border-gray-200 overflow-hidden">
-        <SectionHeader id="golive" icon={Zap} title="Go-Live Mode" />
-        {expandedSections.golive && (
-          <div className="p-4 border-x border-b border-gray-200 space-y-3">
-            <p className="text-xs text-gray-500">Choose how your AI Rep handles tickets.</p>
-
-            {/* Warning when Zendesk not connected — both modes require it */}
-            {zdSkipped && (
-              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
-                <div>
-                  <p className="text-xs text-amber-800 font-medium">Zendesk connection required</p>
-                  <p className="text-xs text-amber-700 mt-0.5">
-                    Both Training and Production modes need a verified Zendesk connection to operate. Training mode writes internal notes, and Production mode sends replies — both require an active Zendesk seat.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <label className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                !canGoLive
-                  ? "opacity-50 cursor-not-allowed border-gray-200"
-                  : goLiveMode === "training"
-                    ? "border-indigo-300 bg-indigo-50 cursor-pointer"
-                    : "border-gray-200 hover:border-gray-300 cursor-pointer"
-              }`}>
-                <input
-                  type="radio"
-                  name="mode"
-                  value="training"
-                  checked={goLiveMode === "training"}
-                  onChange={() => { if (canGoLive) setGoLiveMode("training"); }}
-                  disabled={!canGoLive}
-                  className="accent-indigo-600 mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Training Mode</p>
-                  <p className="text-xs text-gray-500">AI drafts responses and writes internal notes for your review before sending. Best for getting started.</p>
-                  {!canGoLive && (
-                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      Requires Zendesk connection
-                    </p>
-                  )}
-                </div>
-              </label>
-
-              <label className={`flex items-start gap-3 p-3 rounded-lg border transition-colors ${
-                !canGoLive
-                  ? "opacity-50 cursor-not-allowed border-gray-200"
-                  : goLiveMode === "production"
-                    ? "border-indigo-300 bg-indigo-50 cursor-pointer"
-                    : "border-gray-200 hover:border-gray-300 cursor-pointer"
-              }`}>
-                <input
-                  type="radio"
-                  name="mode"
-                  value="production"
-                  checked={goLiveMode === "production"}
-                  onChange={() => {
-                    if (canGoLive) setShowProdConfirm(true);
-                  }}
-                  disabled={!canGoLive}
-                  className="accent-indigo-600 mt-0.5"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-800">Production Mode</p>
-                  <p className="text-xs text-gray-500">AI replies directly to customers. Escalates when uncertain.</p>
-                  {!canGoLive && (
-                    <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                      <AlertCircle className="w-3 h-3" />
-                      Requires Zendesk connection
-                    </p>
-                  )}
-                </div>
-              </label>
-            </div>
-
-            {showProdConfirm && (
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-800 font-medium mb-2">
-                  In Production mode, {hiredRepName} will reply directly to customers without human review. Are you sure?
-                </p>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => { setShowProdConfirm(false); setGoLiveMode("training"); }}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" onClick={() => { setGoLiveMode("production"); setShowProdConfirm(false); }}>
-                    Confirm Production
-                  </Button>
+                  {/* Add Tag */}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex items-center gap-2">
+                      <Tag className="w-3.5 h-3.5 text-gray-500" />
+                      <h4 className="text-xs font-semibold text-gray-700">Add Tag</h4>
+                    </div>
+                    <Input
+                      value={handoff.handoffTag}
+                      onChange={(e) => setHandoff({ handoffTag: e.target.value })}
+                      placeholder="e.g., ai-escalated"
+                      className="max-w-sm text-sm"
+                    />
+                    <div className="flex items-center gap-2 mt-2">
+                      <Switch checked={handoff.autoSetPriority} onCheckedChange={(v) => setHandoff({ autoSetPriority: v })} />
+                      <span className="text-xs text-gray-600">Auto-set priority on escalation</span>
+                    </div>
+                    {handoff.autoSetPriority && (
+                      <div className="flex gap-2 mt-2">
+                        {(["normal", "high", "urgent"] as const).map((p) => (
+                          <button
+                            key={p}
+                            onClick={() => setHandoff({ priority: p })}
+                            className={`px-3 py-1 rounded-lg border text-xs font-medium transition-colors capitalize ${
+                              handoff.priority === p
+                                ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                                : "border-gray-200 text-gray-600 hover:border-gray-300"
+                            }`}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
           </div>
-        )}
+
+          {/* Live Chat — coming soon */}
+          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 opacity-60">
+            <div className="flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-gray-500">Live Chat</p>
+                <p className="text-xs text-gray-400">Handle live chat conversations</p>
+              </div>
+            </div>
+            <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">Coming soon</Badge>
+          </div>
+
+          {/* SMS — coming soon */}
+          <div className="flex items-center justify-between p-3 bg-white rounded-lg border border-gray-200 opacity-60">
+            <div className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-gray-400" />
+              <div>
+                <p className="text-sm font-medium text-gray-500">SMS</p>
+                <p className="text-xs text-gray-400">Handle SMS messages</p>
+              </div>
+            </div>
+            <Badge variant="outline" className="text-xs text-gray-400 border-gray-300">Coming soon</Badge>
+          </div>
+        </div>
       </div>
 
       {/* Footer */}
@@ -1220,7 +1063,7 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
         <Button onClick={handleComplete} size="sm">
           {isWizard ? (
             canGoLive ? (
-              <>{repHired ? "Update & Go Live" : `Hire ${hiredRepName || "Rep"} & Go Live`} <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
+              <>{`Save & Activate ${hiredRepName || "Rep"}`} <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
             ) : (
               <>Save Configuration <ArrowRight className="w-3.5 h-3.5 ml-1" /></>
             )
@@ -1235,13 +1078,10 @@ function ConfigureAgentStep({ isWizard }: { isWizard: boolean }) {
 
 /* ================================================================
    MAIN EXPORT — SetupSettings
-   Wizard mode (isWizard=true): guided 3-step flow
-   Settings mode (isWizard=false): only Zendesk + Configure Agent (no Import)
    ================================================================ */
 export default function SetupSettings({ isWizard = true }: { isWizard?: boolean }) {
   const { setupStep, setSetupStep, stepStatuses } = useApp();
 
-  // In settings mode, if current step is 2 (Import), redirect to step 1
   const effectiveStep = !isWizard && setupStep === 2 ? 1 : setupStep;
 
   return (
@@ -1253,8 +1093,8 @@ export default function SetupSettings({ isWizard = true }: { isWizard?: boolean 
         isWizard={isWizard}
       />
       <div className="flex-1 overflow-y-auto pr-2">
-        {effectiveStep === 1 && <ZendeskStep isWizard={isWizard} />}
-        {effectiveStep === 2 && isWizard && <ImportPoliciesStep isWizard={isWizard} />}
+        {effectiveStep === 1 && <TicketingSystemStep isWizard={isWizard} />}
+        {effectiveStep === 2 && isWizard && <ImportPoliciesStep />}
         {effectiveStep === 3 && <ConfigureAgentStep isWizard={isWizard} />}
       </div>
     </div>
