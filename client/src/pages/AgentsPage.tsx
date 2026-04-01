@@ -1,6 +1,6 @@
 /*
  * AgentsPage — Setup Wizard + Normal mode (Team Lead + Rep views)
- * Round 3: Replaced chat-based onboarding with form-based OnboardingWizard
+ * Round 4: Multi-agent extensibility, skip-blocking, Add Agent
  */
 import { useState, useRef, useEffect } from "react";
 import { useApp } from "@/contexts/AppContext";
@@ -11,10 +11,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Send, User, Crown, ChevronDown,
   ThumbsUp, ThumbsDown,
-  Bot, Settings,
+  Bot, Settings, Plus, AlertTriangle, Globe, FileText,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
-import OnboardingWizard from "@/components/OnboardingWizard";
+import SetupSettings from "@/components/SetupSettings";
+import { toast } from "sonner";
 
 /* AI Badge */
 function AiBadge() {
@@ -235,7 +236,7 @@ function TeamLeadView() {
           <div className="space-y-2 ml-11 max-w-[600px]">
             {pendingTopics.length > 0 && (
               <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                {pendingTopics.length} items for review
+                Pending Review ({pendingTopics.length})
               </p>
             )}
             {pendingTopics.map((topic) => (
@@ -244,22 +245,31 @@ function TeamLeadView() {
                 topic={topic}
                 onAccept={() => updateTopic(topic.id, { status: "accepted" })}
                 onReject={() => updateTopic(topic.id, { status: "rejected" })}
-                onReply={() => {}}
+                onReply={() => toast.info("Reply feature coming soon")}
               />
             ))}
-            {processedTopics.map((topic) => (
-              <TopicCard
-                key={topic.id}
-                topic={topic}
-                onAccept={() => {}}
-                onReject={() => {}}
-                onReply={() => {}}
-              />
-            ))}
+
+            {processedTopics.length > 0 && (
+              <>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mt-4 mb-1">
+                  Processed ({processedTopics.length})
+                </p>
+                {processedTopics.map((topic) => (
+                  <TopicCard
+                    key={topic.id}
+                    topic={topic}
+                    onAccept={() => {}}
+                    onReject={() => {}}
+                    onReply={() => {}}
+                  />
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
 
+      {/* Chat Input */}
       <div className="px-5 py-3 border-t border-border bg-white">
         <div className="flex items-center gap-2">
           <input
@@ -281,7 +291,7 @@ function TeamLeadView() {
 
 /* NORMAL MODE — REP VIEW */
 function RepView({ agentId }: { agentId: string }) {
-  const { agentsData, hiredRepName, setShowSettings } = useApp();
+  const { agentsData, hiredRepName } = useApp();
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedEscalation, setSelectedEscalation] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState("");
@@ -337,7 +347,6 @@ function RepView({ agentId }: { agentId: string }) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
         {!selectedEscalation ? (
           <>
-            {/* Escalation Feed */}
             {needsAttention.length > 0 && (
               <div>
                 <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
@@ -392,7 +401,6 @@ function RepView({ agentId }: { agentId: string }) {
             )}
           </>
         ) : (
-          /* Escalation Detail */
           <div className="animate-in fade-in slide-in-from-right-2 duration-200">
             <button
               onClick={() => setSelectedEscalation(null)}
@@ -432,7 +440,6 @@ function RepView({ agentId }: { agentId: string }) {
           </div>
         )}
 
-        {/* Chat messages */}
         {chatMessages.map((msg, i) => {
           const isUser = msg.sender === "user";
           return (
@@ -489,17 +496,73 @@ function RepView({ agentId }: { agentId: string }) {
   );
 }
 
-/* NORMAL VIEW — WRAPPER with Settings button at bottom */
+/* BLOCKED REP VIEW — shown when setup is incomplete */
+function BlockedRepView() {
+  const { stepStatuses, setShowSettings, setSetupStep, zendeskConnected, sopUploaded } = useApp();
+
+  const missingItems: { icon: React.ElementType; label: string; step: number }[] = [];
+  if (stepStatuses[1] === "skipped" || (!zendeskConnected && stepStatuses[1] !== "complete")) {
+    missingItems.push({ icon: Globe, label: "Connect Zendesk", step: 1 });
+  }
+  if (stepStatuses[2] === "skipped" || (!sopUploaded && stepStatuses[2] !== "complete")) {
+    missingItems.push({ icon: FileText, label: "Import Policies", step: 2 });
+  }
+
+  return (
+    <div className="flex-1 flex items-center justify-center bg-[#fafafa]">
+      <div className="text-center max-w-sm">
+        <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto mb-4">
+          <AlertTriangle className="w-8 h-8 text-amber-500" />
+        </div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">Setup Incomplete</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Your AI Rep can't operate until the following steps are completed:
+        </p>
+        <div className="space-y-2 mb-6">
+          {missingItems.map((item) => (
+            <button
+              key={item.step}
+              onClick={() => {
+                setSetupStep(item.step);
+                setShowSettings(true);
+              }}
+              className="w-full flex items-center gap-3 p-3 bg-white border border-gray-200 rounded-lg hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors text-left"
+            >
+              <item.icon className="w-4 h-4 text-amber-500 shrink-0" />
+              <span className="text-sm text-gray-700 font-medium">{item.label}</span>
+              <span className="text-xs text-indigo-600 ml-auto">Complete →</span>
+            </button>
+          ))}
+        </div>
+        <p className="text-xs text-gray-400">
+          Once all required steps are complete, your Rep will be ready to handle tickets.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* NORMAL VIEW — WRAPPER with Agent sidebar + Add Agent */
 function NormalView() {
-  const { selectedAgentId, setSelectedAgentId, agentsData, hiredRepName, setShowSettings } = useApp();
+  const {
+    selectedAgentId, setSelectedAgentId,
+    agentsData, hiredRepName,
+    setShowSettings,
+    stepStatuses, zendeskConnected, sopUploaded,
+  } = useApp();
   const nonLeadAgents = agentsData.filter((a) => !a.isTeamLead);
   const teamLead = agentsData.find((a) => a.id === "team-lead")!;
 
+  /* Determine if rep is blocked */
+  const zdOk = stepStatuses[1] === "complete" || zendeskConnected;
+  const repBlocked = !zdOk;
+
   return (
     <div className="flex-1 flex h-full">
-      {/* Agent sidebar with Settings at bottom */}
+      {/* Agent sidebar */}
       <div className="w-[60px] border-r border-border bg-[#fafafa] flex flex-col items-center py-3">
         <div className="flex flex-col items-center gap-2 flex-1">
+          {/* Team Lead */}
           <button
             onClick={() => setSelectedAgentId("team-lead")}
             className={cn(
@@ -512,24 +575,42 @@ function NormalView() {
             <Crown size={16} />
           </button>
           <div className="w-6 border-t border-border my-1" />
+
+          {/* Rep agents */}
           {nonLeadAgents.map((agent) => (
             <button
               key={agent.id}
               onClick={() => setSelectedAgentId(agent.id)}
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all relative",
-                selectedAgentId === agent.id && "ring-2 ring-[#6c47ff] ring-offset-2"
+                selectedAgentId === agent.id && "ring-2 ring-[#6c47ff] ring-offset-2",
+                repBlocked && "opacity-50"
               )}
               style={{ background: agent.color }}
-              title={hiredRepName}
+              title={`${hiredRepName}${repBlocked ? " (Setup incomplete)" : ""}`}
             >
               {agent.initials}
-              {escalationFeed.filter((e) => e.status === "needs_attention").length > 0 && (
+              {repBlocked && (
+                <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-400 rounded-full border-2 border-white flex items-center justify-center">
+                  <AlertTriangle size={7} className="text-white" />
+                </span>
+              )}
+              {!repBlocked && escalationFeed.filter((e) => e.status === "needs_attention").length > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full border-2 border-white" />
               )}
             </button>
           ))}
+
+          {/* Add Agent button */}
+          <button
+            onClick={() => toast.info("Add Agent — This feature allows you to create additional AI Reps with different configurations. Coming in the next release.")}
+            className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors mt-1"
+            title="Add Agent"
+          >
+            <Plus size={16} />
+          </button>
         </div>
+
         {/* Settings button at bottom */}
         <button
           onClick={() => setShowSettings(true)}
@@ -539,7 +620,15 @@ function NormalView() {
           <Settings size={18} />
         </button>
       </div>
-      {selectedAgentId === "team-lead" ? <TeamLeadView /> : <RepView agentId={selectedAgentId} />}
+
+      {/* Main content */}
+      {selectedAgentId === "team-lead" ? (
+        <TeamLeadView />
+      ) : repBlocked ? (
+        <BlockedRepView />
+      ) : (
+        <RepView agentId={selectedAgentId} />
+      )}
     </div>
   );
 }
@@ -550,7 +639,17 @@ export default function AgentsPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {agentMode === "setup" ? <OnboardingWizard /> : <NormalView />}
+      {agentMode === "setup" ? (
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="max-w-4xl mx-auto">
+            <div className="mb-6">
+              <h1 className="text-xl font-semibold text-gray-900">Setup Your AI Support Agent</h1>
+              <p className="text-sm text-gray-500 mt-1">Complete these steps to get your AI Rep up and running.</p>
+            </div>
+            <SetupSettings isWizard={true} />
+          </div>
+        </div>
+      ) : <NormalView />}
     </div>
   );
 }

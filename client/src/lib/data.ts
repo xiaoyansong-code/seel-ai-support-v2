@@ -6,7 +6,10 @@
 export interface ActionPermission {
   id: string;
   name: string;
+  label: string;
+  description: string;
   system: string;
+  domain: string;
   type: "read" | "write";
   enabled: boolean;
   locked: boolean;
@@ -207,19 +210,24 @@ export interface OnboardingStep {
 // DEFAULT ACTION PERMISSIONS
 // ============================================================
 export const defaultReadActions: ActionPermission[] = [
-  { id: "lookup_order", name: "Look up order details", system: "Shopify", type: "read", enabled: true, locked: false },
-  { id: "track_shipment", name: "Track shipment", system: "Shopify", type: "read", enabled: true, locked: false },
-  { id: "lookup_customer", name: "Look up customer info", system: "Shopify / Zendesk", type: "read", enabled: true, locked: false },
-  { id: "lookup_product", name: "Look up product info", system: "Shopify", type: "read", enabled: true, locked: false },
-  { id: "lookup_seel", name: "Look up Seel protection status", system: "Seel", type: "read", enabled: true, locked: false },
+  { id: "lookup_order", name: "lookup_order", label: "Look up order details", description: "Retrieve order status, items, and shipping info from Shopify", system: "Shopify", domain: "Orders", type: "read", enabled: true, locked: false },
+  { id: "track_shipment", name: "track_shipment", label: "Track shipment", description: "Get real-time tracking and carrier info for shipped orders", system: "Shopify", domain: "Orders", type: "read", enabled: true, locked: false },
+  { id: "lookup_customer", name: "lookup_customer", label: "Look up customer info", description: "Retrieve customer profile, order history, and contact details", system: "Shopify / Zendesk", domain: "Customers", type: "read", enabled: true, locked: false },
+  { id: "lookup_product", name: "lookup_product", label: "Look up product info", description: "Search product catalog for availability, pricing, and variants", system: "Shopify", domain: "Products", type: "read", enabled: true, locked: false },
+  { id: "lookup_seel", name: "lookup_seel", label: "Look up Seel protection status", description: "Check if order has active Seel shipping protection", system: "Seel", domain: "Insurance", type: "read", enabled: true, locked: false },
+  { id: "read_ticket_history", name: "read_ticket_history", label: "Read ticket history", description: "Access past tickets and interactions for the customer", system: "Zendesk", domain: "Tickets", type: "read", enabled: true, locked: false },
+  { id: "lookup_return_status", name: "lookup_return_status", label: "Look up return status", description: "Check status of existing return or exchange requests", system: "Shopify", domain: "Returns", type: "read", enabled: true, locked: false },
 ];
 
 export const defaultWriteActions: ActionPermission[] = [
-  { id: "reply_customer", name: "Reply to customer", system: "Zendesk", type: "write", enabled: true, locked: true },
-  { id: "escalate_ticket", name: "Escalate to human", system: "Zendesk", type: "write", enabled: true, locked: true },
-  { id: "cancel_order", name: "Cancel order", system: "Shopify", type: "write", enabled: false, locked: false, guardrail: "Within 2 hours of order placement" },
-  { id: "edit_address", name: "Edit shipping address", system: "Shopify", type: "write", enabled: false, locked: false, guardrail: "Before dispatch only" },
-  { id: "file_seel_claim", name: "File insurance", system: "Seel", type: "write", enabled: false, locked: false, guardrail: "Active protection plan required" },
+  { id: "reply_customer", name: "reply_customer", label: "Reply to customer", description: "Send responses directly to customer tickets", system: "Zendesk", domain: "Tickets", type: "write", enabled: true, locked: true },
+  { id: "escalate_ticket", name: "escalate_ticket", label: "Escalate to human", description: "Transfer ticket to human agent when AI cannot resolve", system: "Zendesk", domain: "Tickets", type: "write", enabled: true, locked: true },
+  { id: "cancel_order", name: "cancel_order", label: "Cancel order", description: "Cancel unfulfilled orders in Shopify", system: "Shopify", domain: "Orders", type: "write", enabled: false, locked: false, guardrail: "Within 2 hours of order placement" },
+  { id: "edit_address", name: "edit_address", label: "Edit shipping address", description: "Modify shipping address on unfulfilled orders", system: "Shopify", domain: "Orders", type: "write", enabled: false, locked: false, guardrail: "Before dispatch only" },
+  { id: "file_seel_claim", name: "file_seel_claim", label: "File insurance claim", description: "Submit shipping protection claims through Seel", system: "Seel", domain: "Insurance", type: "write", enabled: false, locked: false, guardrail: "Active protection plan required" },
+  { id: "initiate_return", name: "initiate_return", label: "Initiate return", description: "Create return/exchange requests in Shopify", system: "Shopify", domain: "Returns", type: "write", enabled: false, locked: false, guardrail: "Within return window only" },
+  { id: "issue_refund", name: "issue_refund", label: "Issue refund", description: "Process refunds for eligible orders", system: "Shopify", domain: "Orders", type: "write", enabled: false, locked: false, guardrail: "Manager approval required for > $100" },
+  { id: "add_internal_note", name: "add_internal_note", label: "Add internal note", description: "Add internal notes to Zendesk tickets", system: "Zendesk", domain: "Tickets", type: "write", enabled: true, locked: false },
 ];
 
 // ============================================================
@@ -265,11 +273,7 @@ export const agents: Agent[] = [
     escalation: 11,
     actionPermissions: [
       ...defaultReadActions,
-      { id: "reply_customer", name: "Reply to customer", system: "Zendesk", type: "write", enabled: true, locked: true },
-      { id: "escalate_ticket", name: "Escalate to human", system: "Zendesk", type: "write", enabled: true, locked: true },
-      { id: "cancel_order", name: "Cancel order", system: "Shopify", type: "write", enabled: true, locked: false, guardrail: "Within 2 hours of order placement" },
-      { id: "edit_address", name: "Edit shipping address", system: "Shopify", type: "write", enabled: false, locked: false, guardrail: "Before dispatch only" },
-      { id: "file_seel_claim", name: "File insurance", system: "Seel", type: "write", enabled: false, locked: false, guardrail: "Active protection plan required" },
+      ...defaultWriteActions.map(a => a.id === "cancel_order" ? { ...a, enabled: true } : a),
     ],
     configHistory: [
       { hash: "c4a1e7b", timestamp: "Mar 12, 2026, 11:20 AM", author: "Sarah Chen", summary: "Promoted to Production", diff: "mode: Training → Production" },

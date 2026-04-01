@@ -1,16 +1,16 @@
 /*
  * Home — Main layout: Sidebar + Header Tabs + Content Area
- * Round 3: Setup/Normal toggle, persistent banner, Settings page integration
+ * Round 4: Unified SetupSettings for both wizard and settings modes
  */
 import { useApp } from "@/contexts/AppContext";
 import Sidebar from "@/components/Sidebar";
 import AgentsPage from "@/pages/AgentsPage";
 import PlaybookPage from "@/pages/PlaybookPage";
 import PerformancePage from "@/pages/PerformancePage";
-import SettingsPage from "@/components/SettingsPage";
+import SetupSettings from "@/components/SetupSettings";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, Settings } from "lucide-react";
+import { AlertTriangle, Settings, X } from "lucide-react";
 
 const tabs = [
   { id: "agents" as const, label: "Agents" },
@@ -29,7 +29,9 @@ export default function Home() {
     .filter(([, status]) => status === "skipped")
     .map(([step]) => {
       const labels: Record<string, string> = {
-        "1": "Shopify", "2": "Zendesk", "3": "SOP Documents", "4": "Rep Config", "5": "Go-Live Mode",
+        "1": "Zendesk Connection",
+        "2": "Policy Import",
+        "3": "Agent Configuration",
       };
       return labels[step] || `Step ${step}`;
     });
@@ -120,7 +122,7 @@ export default function Home() {
               Some setup steps were skipped: <strong>{skippedSteps.join(", ")}</strong>.
             </p>
             <button
-              onClick={() => setAgentMode("setup")}
+              onClick={() => setShowSettings(true)}
               className="text-[12px] text-[#6c47ff] hover:underline font-medium ml-1"
             >
               Complete setup
@@ -131,7 +133,23 @@ export default function Home() {
         {/* Content */}
         <div className="flex-1 overflow-hidden bg-[#fafafa]">
           {showSettings ? (
-            <SettingsPage />
+            <div className="flex-1 h-full overflow-y-auto p-6">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h1 className="text-xl font-semibold text-gray-900">Settings</h1>
+                    <p className="text-sm text-gray-500 mt-1">Manage your AI agent configuration, integrations, and preferences.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  >
+                    <X size={18} />
+                  </button>
+                </div>
+                <SetupSettings isWizard={false} />
+              </div>
+            </div>
           ) : (
             <>
               {mainTab === "agents" && <AgentsPage />}

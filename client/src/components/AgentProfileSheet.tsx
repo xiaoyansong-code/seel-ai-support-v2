@@ -187,7 +187,7 @@ export default function AgentProfileSheet({
                 </div>
                 <div className="border border-border rounded-lg overflow-hidden">
                   {readPerms.map((perm) => (
-                    <PermissionRow key={perm.id} name={perm.name} system={perm.system} enabled={perm.enabled} locked={perm.locked} />
+                    <PermissionRow key={perm.id} name={perm.label} system={perm.system} enabled={perm.enabled} locked={perm.locked} />
                   ))}
                 </div>
               </div>
@@ -198,7 +198,7 @@ export default function AgentProfileSheet({
                 </div>
                 <div className="border border-border rounded-lg overflow-hidden">
                   {writePerms.map((perm) => (
-                    <PermissionRow key={perm.id} name={perm.name} system={perm.system} enabled={perm.enabled} locked={perm.locked} />
+                    <PermissionRow key={perm.id} name={perm.label} system={perm.system} enabled={perm.enabled} locked={perm.locked} />
                   ))}
                 </div>
               </div>
