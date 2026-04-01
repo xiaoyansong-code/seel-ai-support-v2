@@ -142,6 +142,7 @@ interface AppState {
   removeDocument: (id: string) => void;
   toggleDocInUse: (id: string) => void;
   updateDocument: (id: string, updates: Partial<Document>) => void;
+  resetDocuments: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -262,6 +263,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateDocument = useCallback((id: string, updates: Partial<Document>) => {
     setDocsData((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
   }, []);
+  const resetDocuments = useCallback(() => {
+    setDocsData([]);
+    setSopUploaded(false);
+    setExtractedRuleNames([]);
+  }, []);
 
   /* ── Setup Progress derived state ── */
   const step1Complete = zendeskConnected;
@@ -300,7 +306,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         agentsData, updateAgent,
         rulesData, updateRule, toggleRule,
         topicsData, updateTopic, addTopic,
-        docsData, addDocument, removeDocument, toggleDocInUse, updateDocument,
+        docsData, addDocument, removeDocument, toggleDocInUse, updateDocument, resetDocuments,
       }}
     >
       {children}

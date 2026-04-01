@@ -158,7 +158,7 @@ function SetupProgress() {
     setShowSettings, setSettingsSection,
     setMainTab, setPlaybookDeepLink,
     setSelectedAgentId, setShowGoLiveGuide, goLiveGuideShown, setGoLiveGuideShown,
-    hiredRepName,
+    hiredRepName, resetDocuments,
   } = useApp();
 
   const steps = [
@@ -241,6 +241,17 @@ function SetupProgress() {
               style={{ width: `${(completedCount / steps.length) * 100}%` }}
             />
           </div>
+        </div>
+
+        {/* Demo: Reset Documents */}
+        <div className="flex items-center justify-center gap-2 mb-4">
+          <span className="text-[10px] text-gray-400 uppercase tracking-wider">Demo:</span>
+          <button
+            onClick={() => { resetDocuments(); toast.success("Documents reset — Import Policies is now empty."); }}
+            className="text-[11px] text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
+          >
+            Reset Documents
+          </button>
         </div>
 
         {/* Steps */}
