@@ -192,6 +192,7 @@ export interface Topic {
   summary: string;
   ruleContent?: string;
   currentRuleContent?: string;
+  newRuleContent?: string;
   sourceTickets: string[];
   status: "pending" | "accepted" | "rejected" | "revised";
 }
@@ -847,6 +848,8 @@ export const dailyDigest = {
   deltaSentiment: "-1%",
   fullResolutionTime: "11m 40s",
   deltaFrt: "-1m 20s",
+  escalationRate: "58%",
+  deltaEscalation: "-2%",
   updateCount: 3,
 };
 
@@ -857,7 +860,7 @@ export const topics: Topic[] = [
   {
     id: "topic-1",
     type: "proposal",
-    badge: "PROPOSED NEW RULE",
+    badge: "NEW RULE",
     confidence: "High",
     title: "International Returns — Customs Duty Refund",
     summary: "18 tickets about international customs duties were escalated this week. Customers are confused about whether customs duties are refundable. Recommend adding a rule to handle this automatically.",
@@ -877,12 +880,13 @@ export const topics: Topic[] = [
   {
     id: "topic-3",
     type: "proposal",
-    badge: "PROPOSED RULE UPDATE",
+    badge: "RULE UPDATE",
     confidence: "Medium",
     title: "Extend return window for VIP customers",
     summary: "VIP customers have a 15% higher return rate but 40% higher LTV. Extending their return window from 30 to 45 days could improve satisfaction without significant cost impact.",
     ruleContent: "Update VIP Customer Handling rule:\n- Extend return window from 30 days to 45 days for VIP customers\n- Apply to customers tagged VIP, or with 5+ orders, or LTV > $500",
     currentRuleContent: "For customers tagged as VIP (or 5+ orders, or LTV > $500):\n1. Always prioritize their tickets\n2. Skip store credit offer — process direct refund\n3. Use empathetic, personalized tone\n4. If complaint: escalate immediately to L2\n5. Proactively offer compensation (discount code) for any inconvenience",
+    newRuleContent: "For customers tagged as VIP (or 5+ orders, or LTV > $500):\n1. Always prioritize their tickets\n2. Extend return window from 30 days to 45 days\n3. Skip store credit offer — process direct refund\n4. Use empathetic, personalized tone\n5. If complaint: escalate immediately to L2\n6. Proactively offer compensation (discount code) for any inconvenience",
     sourceTickets: ["TK-4891"],
     status: "pending",
   },

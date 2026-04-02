@@ -19,6 +19,11 @@ import {
 import AgentProfileSheet from "@/components/AgentProfileSheet";
 import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 import { toast } from "sonner";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
+  AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 /* ── AI Badge ── */
 function AiBadge() {
@@ -76,43 +81,63 @@ function ChatInput({ value, onChange, onSend, placeholder }: {
   );
 }
 
-/* ── PROPOSAL CARD (default expanded, no question type, no Reply) ── */
+/* ── PROPOSAL CARD — no confidence, "What changed" visual, New Rule instead of Current Rule ── */
 function ProposalCard({ topic, onAccept, onReject, onTicketClick }: {
-  topic: { id: string; badge: string; confidence?: string; title: string; summary: string; ruleContent?: string; currentRuleContent?: string; sourceTickets: string[]; status: string };
+  topic: { id: string; badge: string; title: string; summary: string; ruleContent?: string; currentRuleContent?: string; newRuleContent?: string; sourceTickets: string[]; status: string };
   onAccept: () => void;
   onReject: () => void;
   onTicketClick: (ticketId: string) => void;
 }) {
   const [ruleExpanded, setRuleExpanded] = useState(false);
-  const [currentRuleExpanded, setCurrentRuleExpanded] = useState(false);
+  const [newRuleExpanded, setNewRuleExpanded] = useState(false);
+  const isUpdate = !!topic.currentRuleContent;
 
   return (
     <div className="bg-white border border-border rounded-xl overflow-hidden">
-      {/* Header */}
+      {/* Header — no confidence badge */}
       <div className="px-4 py-3 flex items-center gap-2">
         <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider shrink-0 py-0 h-5 border-[#6c47ff] text-[#6c47ff] bg-[#f0edff]">
           {topic.badge}
         </Badge>
-        {topic.confidence && (
-          <Badge variant="secondary" className="text-[9px] shrink-0 py-0 h-5">
-            {topic.confidence}
-          </Badge>
-        )}
         <span className="text-[13px] font-medium text-foreground flex-1">{topic.title}</span>
         {topic.status === "pending" && (
           <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
         )}
       </div>
 
-      {/* Body — always expanded */}
+      {/* Body */}
       <div className="px-4 pb-4 pt-0 border-t border-border/50">
         <p className="text-[12px] text-muted-foreground leading-relaxed mt-3 mb-3">{topic.summary}</p>
 
-        {/* Proposed rule — line-clamp with expand */}
-        {topic.ruleContent && (
+        {/* What changed — strong visual differentiation with left accent border + tinted bg */}
+        {topic.ruleContent && isUpdate && (
+          <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 mb-3 relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 rounded-l-lg" />
+            <p className="text-[10px] font-semibold text-amber-700 mb-1.5 uppercase tracking-wider pl-2">
+              What Changed
+            </p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap pl-2",
+              !ruleExpanded && "line-clamp-3"
+            )}>
+              {topic.ruleContent}
+            </p>
+            {topic.ruleContent.split("\n").length > 3 && !ruleExpanded && (
+              <button
+                onClick={() => setRuleExpanded(true)}
+                className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1 pl-2"
+              >
+                Show full rule
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Proposed Rule — for new rules (not updates) */}
+        {topic.ruleContent && !isUpdate && (
           <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
             <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-              {topic.currentRuleContent ? "Proposed Change" : "Proposed Rule"}
+              New Rule
             </p>
             <p className={cn(
               "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
@@ -131,19 +156,19 @@ function ProposalCard({ topic, onAccept, onReject, onTicketClick }: {
           </div>
         )}
 
-        {/* Current rule */}
-        {topic.currentRuleContent && (
-          <div className="bg-[#fafafa] border border-[#e5e7eb] rounded-lg p-3 mb-3 opacity-70">
-            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Current Rule</p>
+        {/* New Rule (the final result after update) — replaces old "Current Rule" */}
+        {topic.newRuleContent && (
+          <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">New Rule</p>
             <p className={cn(
               "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
-              !currentRuleExpanded && "line-clamp-3"
+              !newRuleExpanded && "line-clamp-3"
             )}>
-              {topic.currentRuleContent}
+              {topic.newRuleContent}
             </p>
-            {topic.currentRuleContent.split("\n").length > 3 && !currentRuleExpanded && (
+            {topic.newRuleContent.split("\n").length > 3 && !newRuleExpanded && (
               <button
-                onClick={() => setCurrentRuleExpanded(true)}
+                onClick={() => setNewRuleExpanded(true)}
                 className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1"
               >
                 Show full rule
@@ -366,7 +391,7 @@ function SetupProgress() {
    Daily Digest + Proposals appear as messages from Alex
    ================================================================ */
 function TeamLeadView() {
-  const { topicsData, updateTopic, hiredRepName } = useApp();
+  const { topicsData, updateTopic, hiredRepName, setMainTab } = useApp();
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState("");
   const [sidebarTicketId, setSidebarTicketId] = useState<string | null>(null);
@@ -423,27 +448,42 @@ function TeamLeadView() {
             </div>
             <div className="bg-white border border-border rounded-xl p-4">
               <p className="text-[13px] font-semibold mb-3">Daily Digest</p>
-              <div className="grid grid-cols-4 gap-3 mb-3">
+              <div className="grid grid-cols-3 gap-3 mb-3">
                 {[
-                  { label: "Tickets", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets },
-                  { label: "Resolution", value: dailyDigest.resolutionRate, trend: dailyDigest.deltaResolution },
-                  { label: "CSAT", value: dailyDigest.csatScore, trend: dailyDigest.deltaCsat },
-                  { label: "Avg Response", value: dailyDigest.avgResponseTime, trend: dailyDigest.deltaRt },
-                ].map((stat) => (
-                  <div key={stat.label} className="bg-[#f8f9fa] rounded-lg p-2.5 text-center">
-                    <p className="text-[18px] font-bold text-foreground">{stat.value}</p>
-                    <p className="text-[10px] text-muted-foreground">{stat.label}</p>
-                    {stat.trend && (
-                      <p className={cn("text-[10px] font-medium", stat.trend.startsWith("+") || stat.trend.startsWith("-") ? (stat.trend.startsWith("+") ? "text-green-600" : "text-red-500") : "text-gray-500")}>
-                        {stat.trend}
-                      </p>
-                    )}
-                  </div>
-                ))}
+                  { label: "Tickets handled", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets, positive: true },
+                  { label: "Auto-resolution", value: dailyDigest.resolutionRate, trend: dailyDigest.deltaResolution, positive: true },
+                  { label: "Escalation", value: dailyDigest.escalationRate, trend: dailyDigest.deltaEscalation, positive: false },
+                ].map((stat) => {
+                  // For escalation, negative trend is good (fewer escalations)
+                  const trendColor = stat.trend?.startsWith("+")
+                    ? (stat.positive ? "text-green-600" : "text-red-500")
+                    : stat.trend?.startsWith("-")
+                    ? (stat.positive ? "text-red-500" : "text-green-600")
+                    : "text-gray-500";
+                  return (
+                    <div key={stat.label} className="bg-[#f8f9fa] rounded-lg p-2.5 text-center">
+                      <p className="text-[18px] font-bold text-foreground">{stat.value}</p>
+                      <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                      {stat.trend && (
+                        <p className={cn("text-[10px] font-medium", trendColor)}>
+                          {stat.trend}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-[12px] text-muted-foreground leading-relaxed">
-                Handled {dailyDigest.totalTickets} tickets today. Resolution rate at {dailyDigest.resolutionRate} ({dailyDigest.deltaResolution}). CSAT score: {dailyDigest.csatScore}. Average response time: {dailyDigest.avgResponseTime} ({dailyDigest.deltaRt}). Sentiment change rate: {dailyDigest.sentimentChangedRate}. Full resolution time: {dailyDigest.fullResolutionTime} ({dailyDigest.deltaFrt}).
-              </p>
+              <div className="border-t border-border/50 pt-3">
+                <p className="text-[12px] text-foreground leading-relaxed">
+                  {proposals.filter(t => t.status === "pending").length} items below need your review.
+                </p>
+                <button
+                  onClick={() => setMainTab("performance")}
+                  className="text-[12px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1 inline-flex items-center gap-1"
+                >
+                  View full dashboard <ArrowRight size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -528,6 +568,7 @@ function RepView({ agentId }: { agentId: string }) {
   const agent = agentsData.find((a) => a.id === agentId) || agentsData[1];
   const [profileOpen, setProfileOpen] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
+  const [pendingMode, setPendingMode] = useState<"production" | "training" | "off" | null>(null);
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -559,12 +600,37 @@ function RepView({ agentId }: { agentId: string }) {
   };
   const currentMode = modeConfig[goLiveMode];
 
-  const handleModeChange = (mode: "production" | "training" | "off") => {
+  // Get transition warning message based on from → to
+  const getTransitionMessage = (from: string, to: string): string | null => {
+    if (from === "production" && to === "off")
+      return "There are 3 in-progress tickets. They will be reassigned to human agents.";
+    if (from === "production" && to === "training")
+      return "In-progress tickets will complete in Production mode. New tickets will use Training mode.";
+    if (from === "training" && to === "production")
+      return "Your Rep will start replying directly to customers.";
+    if (from === "off" && to === "production")
+      return "Your Rep will start replying directly to customers immediately.";
+    return null;
+  };
+
+  const handleModeClick = (mode: "production" | "training" | "off") => {
     if ((mode === "production" || mode === "training") && !zdOk) return;
+    if (mode === goLiveMode) return;
+    const msg = getTransitionMessage(goLiveMode, mode);
+    if (msg) {
+      setPendingMode(mode);
+      setShowModeDropdown(false);
+    } else {
+      confirmModeChange(mode);
+    }
+  };
+
+  const confirmModeChange = (mode: "production" | "training" | "off") => {
     setGoLiveMode(mode);
     setShowModeDropdown(false);
+    setPendingMode(null);
     if (showGoLiveGuide) setShowGoLiveGuide(false);
-    toast.success(`Mode changed to ${mode}`);
+    toast.success(`Mode changed to ${modeConfig[mode].label}`);
   };
 
   const handleResolve = (id: string) => {
@@ -630,7 +696,7 @@ function RepView({ agentId }: { agentId: string }) {
               <div className="absolute right-0 top-full mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                 <div className="p-2 space-y-0.5">
                   <button
-                    onClick={() => handleModeChange("production")}
+                    onClick={() => handleModeClick("production")}
                     className={cn(
                       "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
                       goLiveMode === "production" ? "bg-green-50 text-green-700" : "hover:bg-gray-50 text-gray-700",
@@ -645,7 +711,7 @@ function RepView({ agentId }: { agentId: string }) {
                     </div>
                   </button>
                   <button
-                    onClick={() => handleModeChange("training")}
+                    onClick={() => handleModeClick("training")}
                     className={cn(
                       "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
                       goLiveMode === "training" ? "bg-blue-50 text-blue-700" : "hover:bg-gray-50 text-gray-700",
@@ -660,7 +726,7 @@ function RepView({ agentId }: { agentId: string }) {
                     </div>
                   </button>
                   <button
-                    onClick={() => handleModeChange("off")}
+                    onClick={() => handleModeClick("off")}
                     className={cn(
                       "w-full text-left px-3 py-2 rounded-lg text-sm transition-colors flex items-center gap-2",
                       goLiveMode === "off" ? "bg-gray-100 text-gray-600" : "hover:bg-gray-50 text-gray-700"
@@ -724,8 +790,8 @@ function RepView({ agentId }: { agentId: string }) {
             : null;
 
           return (
-            <div key={card.id} className={cn("flex gap-3 items-start transition-opacity", isResolved && "opacity-50")}>
-              {/* Rep avatar */}
+            <div key={card.id} className="flex gap-3 items-start">
+              {/* Rep avatar — never changes opacity */}
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
                 style={{ background: agent.color }}
@@ -742,36 +808,32 @@ function RepView({ agentId }: { agentId: string }) {
                   <span className="text-[10px] text-muted-foreground ml-auto">{card.time}</span>
                 </div>
 
-                {/* Escalation message card — flat, no expand/collapse */}
+                {/* Escalation message card — clickable to open sidebar */}
                 <div
                   className={cn(
-                    "rounded-xl border px-4 py-3",
+                    "rounded-xl border px-4 py-3 cursor-pointer transition-all",
                     isNeedsAttention
-                      ? "bg-[#fffbf0] border-[#f5e6c8]"
-                      : "bg-white border-border"
+                      ? "bg-[#fffbf0] border-[#f5e6c8] hover:border-[#e8d4a8]"
+                      : "bg-white border-border opacity-50"
                   )}
+                  onClick={() => setSidebarTicketId(card.ticketId)}
                 >
                   {/* Ticket ID + status line */}
                   <div className="flex items-center gap-2 mb-1.5">
-                    {/* Ticket ID — click opens sidebar */}
-                    <button
-                      className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
-                      onClick={(e) => { e.stopPropagation(); setSidebarTicketId(card.ticketId); }}
-                    >
-                      {card.ticketId}
-                    </button>
-                    {/* Zendesk external link */}
-                    {zendeskUrl && (
+                    {/* Ticket ID — links to Zendesk */}
+                    {zendeskUrl ? (
                       <a
                         href={zendeskUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-[#6c47ff] transition-colors"
+                        className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2 inline-flex items-center gap-1"
                         onClick={(e) => e.stopPropagation()}
-                        title="Open in Zendesk"
                       >
-                        <ExternalLink size={12} />
+                        {card.ticketId}
+                        <ExternalLink size={10} className="opacity-50" />
                       </a>
+                    ) : (
+                      <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
                     )}
                     <span className={cn(
                       "text-[11px] font-medium",
@@ -780,16 +842,14 @@ function RepView({ agentId }: { agentId: string }) {
                       {isResolved ? "Resolved" : "Escalated"}
                     </span>
 
-                    {/* Resolve button — on the card, right side */}
+                    {/* Resolve button — subtle text-only style */}
                     {isNeedsAttention && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-[10px] px-2.5 ml-auto border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                      <button
+                        className="ml-auto text-[10px] text-muted-foreground hover:text-green-700 transition-colors inline-flex items-center gap-1"
                         onClick={(e) => { e.stopPropagation(); handleResolve(card.id); }}
                       >
-                        <CheckCircle2 size={10} className="mr-1" /> Resolve
-                      </Button>
+                        <CheckCircle2 size={10} /> Resolve
+                      </button>
                     )}
                   </div>
 
@@ -854,6 +914,29 @@ function RepView({ agentId }: { agentId: string }) {
 
       {/* ConversationLogSidebar */}
       <ConversationLogSidebar ticketId={sidebarTicketId} onClose={() => setSidebarTicketId(null)} />
+
+      {/* Mode transition confirmation dialog */}
+      <AlertDialog open={!!pendingMode} onOpenChange={(open) => { if (!open) setPendingMode(null); }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[15px]">
+              Switch to {pendingMode ? modeConfig[pendingMode].label : ""} mode?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-[13px]">
+              {pendingMode && getTransitionMessage(goLiveMode, pendingMode)}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-[12px] h-8">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-[12px] h-8 bg-[#6c47ff] hover:bg-[#5a3ad9]"
+              onClick={() => { if (pendingMode) confirmModeChange(pendingMode); }}
+            >
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
