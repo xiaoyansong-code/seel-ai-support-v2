@@ -98,11 +98,18 @@ export interface EscalationCard {
   subject: string;
   summary: string;
   reason: string;
+  customer: string;
+  email: string;
+  intent: string;
   sentiment: "frustrated" | "neutral" | "urgent";
+  outcome: "Escalated" | "Resolved";
+  mode: "Production" | "Training";
   priority: "High" | "Medium" | "Low";
   orderValue: string;
+  turns: number;
   time: string;
   createdAt: string;
+  startedAt: string;
   status: "needs_attention" | "resolved";
   thread: { role: "customer" | "rep"; content: string }[];
 }
@@ -537,11 +544,18 @@ export const escalationFeed: EscalationCard[] = [
     subject: "Refund to PayPal request",
     summary: "Customer requesting refund to PayPal instead of original credit card. Current rules only cover refunds to original payment method.",
     reason: "No rule covers PayPal-specific refund routing. Escalated for human decision.",
+    customer: "Mike Torres",
+    email: "mike.t@email.com",
+    intent: "Cross-Payment Refund",
     sentiment: "frustrated",
+    outcome: "Escalated",
+    mode: "Production",
     priority: "High",
     orderValue: "$129.00",
+    turns: 4,
     time: "2h ago",
     createdAt: "2h ago",
+    startedAt: "2026/3/29 00:10:00",
     status: "needs_attention",
     thread: [
       { role: "customer", content: "Hi, I paid with PayPal and would like my refund back to PayPal, not my credit card." },
@@ -556,11 +570,18 @@ export const escalationFeed: EscalationCard[] = [
     subject: "International return — customs duty",
     summary: "Customer in UK asking about customs duty refund on returned item. No rule covers international customs duty handling.",
     reason: "International customs duty refund not covered by any existing rule.",
+    customer: "Sarah Chen",
+    email: "sarah.c@email.com",
+    intent: "International Return",
     sentiment: "neutral",
+    outcome: "Escalated",
+    mode: "Production",
     priority: "Medium",
     orderValue: "$215.00",
+    turns: 4,
     time: "3h ago",
     createdAt: "3h ago",
+    startedAt: "2026/3/29 01:25:00",
     status: "needs_attention",
     thread: [
       { role: "customer", content: "I returned my order but I also paid customs duty. Will I get that refunded too?" },
@@ -575,11 +596,18 @@ export const escalationFeed: EscalationCard[] = [
     subject: "Gift card balance dispute",
     summary: "Customer claims gift card balance is incorrect after partial use. Need to verify transaction history.",
     reason: "Gift card balance discrepancy requires manual transaction audit.",
+    customer: "James Wilson",
+    email: "j.wilson@email.com",
+    intent: "Gift Card Inquiry",
     sentiment: "frustrated",
+    outcome: "Resolved",
+    mode: "Production",
     priority: "Low",
     orderValue: "$50.00",
+    turns: 3,
     time: "5h ago",
     createdAt: "5h ago",
+    startedAt: "2026/3/28 22:45:00",
     status: "resolved",
     thread: [
       { role: "customer", content: "My gift card should have $50 left but it's showing $12." },
@@ -593,11 +621,18 @@ export const escalationFeed: EscalationCard[] = [
     subject: "Damaged item — photo evidence",
     summary: "Customer sent photos of damaged packaging. Item appears intact but customer insists on replacement.",
     reason: "Photo evidence assessment needed — packaging damaged but item may be intact.",
+    customer: "Lisa Park",
+    email: "lisa.p@email.com",
+    intent: "Damaged Item Claim",
     sentiment: "neutral",
+    outcome: "Resolved",
+    mode: "Training",
     priority: "Medium",
     orderValue: "$89.00",
+    turns: 4,
     time: "6h ago",
     createdAt: "6h ago",
+    startedAt: "2026/3/28 21:30:00",
     status: "resolved",
     thread: [
       { role: "customer", content: "The box arrived completely crushed. I want a replacement." },
