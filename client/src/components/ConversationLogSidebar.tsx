@@ -1,20 +1,23 @@
 /*
  * ConversationLogSidebar — right-side slide-out panel for viewing ticket conversation logs.
- * Reuses the same conversation detail pattern from PerformancePage.
- * Accepts a ticketId, looks up the conversation log, and renders thread + reasoning.
+ * Supports both conversationLogs (TK-xxxx) and escalationFeed (#xxxx) ticket formats.
+ * When a conversationLog match is found, renders the full thread + reasoning view.
+ * When an escalation match is found, renders the escalation thread in a similar format.
  */
 import { useState } from "react";
 import {
   conversationLogs,
+  escalationFeed,
   type ConversationLog,
   type ReasoningTurn,
+  type EscalationCard,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   X, Brain, MessageSquare, Search, ArrowRight,
-  Play, CheckCircle, XCircle, Shield,
+  Play, CheckCircle, XCircle, Shield, User, Bot,
 } from "lucide-react";
 
 /* ── Public API ── */
@@ -27,6 +30,7 @@ export default function ConversationLogSidebar({ ticketId, onClose }: Conversati
   if (!ticketId) return null;
 
   const convo = conversationLogs.find((c) => c.ticketId === ticketId) ?? null;
+  const escalation = !convo ? escalationFeed.find((e) => e.ticketId === ticketId) ?? null : null;
 
   return (
     <>
@@ -52,6 +56,8 @@ export default function ConversationLogSidebar({ ticketId, onClose }: Conversati
         <div className="flex-1 overflow-y-auto">
           {convo ? (
             <ConversationDetail convo={convo} />
+          ) : escalation ? (
+            <EscalationDetail escalation={escalation} />
           ) : (
             <div className="flex items-center justify-center h-full text-center px-8">
               <div>
@@ -66,6 +72,80 @@ export default function ConversationLogSidebar({ ticketId, onClose }: Conversati
         </div>
       </div>
     </>
+  );
+}
+
+/* ── Escalation Detail ── */
+function EscalationDetail({ escalation }: { escalation: EscalationCard }) {
+  const isResolved = escalation.status === "resolved";
+
+  return (
+    <div className="flex flex-col">
+      {/* Meta header */}
+      <div className="px-5 pt-4 pb-0">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Badge variant="secondary" className="text-[10px]">{escalation.ticketId}</Badge>
+          <Badge variant="outline" className={cn(
+            "text-[10px]",
+            isResolved
+              ? "border-green-300 text-green-700 bg-green-50"
+              : "border-amber-300 text-amber-700 bg-amber-50"
+          )}>
+            {isResolved ? "Resolved" : "Escalated"}
+          </Badge>
+        </div>
+        <h4 className="text-[15px] font-semibold">{escalation.subject}</h4>
+        <p className="text-[12px] text-muted-foreground mt-1 leading-relaxed">{escalation.summary}</p>
+      </div>
+
+      {/* Meta row */}
+      <div className="px-5 py-2 flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
+        <span>Sentiment: <span className={cn(
+          "font-medium",
+          escalation.sentiment === "frustrated" ? "text-red-600" : "text-foreground"
+        )}>{escalation.sentiment}</span></span>
+        <span>Order: <span className="font-medium text-foreground">{escalation.orderValue}</span></span>
+        <span>{escalation.time}</span>
+      </div>
+
+      {/* Escalation reason */}
+      <div className="px-5 py-2 border-b border-border">
+        <div className="bg-amber-50/60 border border-amber-100 rounded-lg p-3">
+          <p className="text-[11px] font-semibold text-amber-700 mb-1">Escalation Reason</p>
+          <p className="text-[12px] text-foreground leading-relaxed">{escalation.reason}</p>
+        </div>
+      </div>
+
+      {/* Thread */}
+      <div className="px-5 py-4">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-3">Conversation Thread</p>
+        <div className="space-y-3">
+          {escalation.thread.map((msg, i) => {
+            const isCustomer = msg.role === "customer";
+            return (
+              <div key={i} className={cn(
+                "rounded-lg p-3 text-[12px]",
+                isCustomer
+                  ? "bg-[#f8f8f8] border border-border"
+                  : "bg-[#f0edff] border border-[#e0d8ff]"
+              )}>
+                <div className="flex items-center gap-2 mb-1.5">
+                  {isCustomer ? (
+                    <User size={12} className="text-muted-foreground" />
+                  ) : (
+                    <Bot size={12} className="text-[#6c47ff]" />
+                  )}
+                  <span className="font-semibold text-[12px]">
+                    {isCustomer ? "Customer" : "AI Rep"}
+                  </span>
+                </div>
+                <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -753,19 +753,25 @@ function RepView({ agentId }: { agentId: string }) {
                 >
                   {/* Ticket ID + status line */}
                   <div className="flex items-center gap-2 mb-1.5">
-                    {/* Ticket ID — link to Zendesk */}
-                    {zendeskUrl ? (
+                    {/* Ticket ID — click opens sidebar */}
+                    <button
+                      className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
+                      onClick={(e) => { e.stopPropagation(); setSidebarTicketId(card.ticketId); }}
+                    >
+                      {card.ticketId}
+                    </button>
+                    {/* Zendesk external link */}
+                    {zendeskUrl && (
                       <a
                         href={zendeskUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
+                        className="text-muted-foreground hover:text-[#6c47ff] transition-colors"
                         onClick={(e) => e.stopPropagation()}
+                        title="Open in Zendesk"
                       >
-                        {card.ticketId}
+                        <ExternalLink size={12} />
                       </a>
-                    ) : (
-                      <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
                     )}
                     <span className={cn(
                       "text-[11px] font-medium",
