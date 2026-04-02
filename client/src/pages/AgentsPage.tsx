@@ -14,7 +14,7 @@ import {
   ThumbsUp, ThumbsDown,
   Bot, Settings, Plus, AlertTriangle, Globe,
   FileText, UserPlus, Rocket,
-  CheckCircle2, Lock, ArrowRight,
+  CheckCircle2, Lock, ArrowRight, MessageCircle, Clock,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
 import { toast } from "sonner";
@@ -158,7 +158,7 @@ function SetupProgress() {
     setShowSettings, setSettingsSection,
     setMainTab, setPlaybookDeepLink,
     setSelectedAgentId, setShowGoLiveGuide, goLiveGuideShown, setGoLiveGuideShown,
-    hiredRepName, resetDocuments,
+    hiredRepName, resetDocuments, completeSetupDemo,
   } = useApp();
 
   const steps = [
@@ -251,6 +251,13 @@ function SetupProgress() {
             className="text-[11px] text-indigo-600 hover:text-indigo-800 underline underline-offset-2"
           >
             Reset Documents
+          </button>
+          <span className="text-[10px] text-gray-300">|</span>
+          <button
+            onClick={() => { completeSetupDemo(); toast.success("All setup steps completed!"); }}
+            className="text-[11px] text-green-600 hover:text-green-800 underline underline-offset-2"
+          >
+            Complete All Steps
           </button>
         </div>
 
@@ -415,30 +422,6 @@ function TeamLeadView() {
           </div>
         )}
 
-        {/* Escalation Feed */}
-        {escalationFeed.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Escalation Feed
-            </p>
-            <div className="space-y-2">
-              {escalationFeed.filter((c) => c.status === "needs_attention").map((card) => (
-                <div key={card.id} className="bg-white border border-border rounded-xl p-3.5">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <Badge variant="outline" className="text-[9px] font-bold border-red-200 text-red-600 bg-red-50 h-5 py-0">
-                      {card.priority}
-                    </Badge>
-                    <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
-                    <span className="text-[11px] text-muted-foreground ml-auto">{card.time}</span>
-                  </div>
-                  <p className="text-[12px] text-foreground mb-1">{card.subject}</p>
-                  <p className="text-[11px] text-muted-foreground line-clamp-2">{card.reason}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Chat messages */}
         {chatMessages.map((msg, i) => {
           const isUser = msg.sender === "user";
@@ -541,9 +524,11 @@ function RepView({ agentId }: { agentId: string }) {
     toast.success(`Mode changed to ${mode}`);
   };
 
-  const needsAttention = escalationFeed.filter((c) => c.status === "needs_attention");
-  const resolved = escalationFeed.filter((c) => c.status === "resolved");
-  const selectedCard = selectedEscalation ? escalationFeed.find((c) => c.id === selectedEscalation) : null;
+  // All escalations in chronological order (needs_attention first, then resolved)
+  const allEscalations = [
+    ...escalationFeed.filter((c) => c.status === "needs_attention"),
+    ...escalationFeed.filter((c) => c.status === "resolved"),
+  ];
 
   const displayName = hiredRepName || "AI Rep";
 
@@ -665,102 +650,143 @@ function RepView({ agentId }: { agentId: string }) {
         </Button>
       </div>
 
-      {/* Content */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-4">
-        {!selectedEscalation ? (
-          <>
-            {needsAttention.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Needs Attention ({needsAttention.length})
-                </p>
-                <div className="space-y-2">
-                  {needsAttention.map((card) => (
-                    <button
-                      key={card.id}
-                      onClick={() => setSelectedEscalation(card.id)}
-                      className="w-full text-left bg-white border border-border rounded-xl p-3.5 hover:border-[#6c47ff]/30 transition-colors group"
-                    >
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <Badge variant="outline" className="text-[9px] font-bold border-red-200 text-red-600 bg-red-50 h-5 py-0">
-                          {card.priority}
-                        </Badge>
-                        <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
-                        <span className="text-[11px] text-muted-foreground ml-auto">{card.time}</span>
-                      </div>
-                      <p className="text-[12px] text-foreground mb-1">{card.subject}</p>
-                      <p className="text-[11px] text-muted-foreground line-clamp-2">{card.reason}</p>
-                    </button>
-                  ))}
-                </div>
+      {/* Content — Conversational Escalation Feed */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
+        {/* Chronological escalation messages */}
+        {allEscalations.map((card) => {
+          const isNeedsAttention = card.status === "needs_attention";
+          const isExpanded = selectedEscalation === card.id;
+          return (
+            <div key={card.id} className="flex gap-3 items-start">
+              {/* Rep avatar */}
+              <div
+                className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
+                style={{ background: agent.color }}
+              >
+                {hiredRepName ? hiredRepName.slice(0, 2).toUpperCase() : agent.initials}
               </div>
-            )}
 
-            {resolved.length > 0 && (
-              <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  Recently Resolved ({resolved.length})
-                </p>
-                <div className="space-y-2">
-                  {resolved.map((card) => (
-                    <button
-                      key={card.id}
-                      onClick={() => setSelectedEscalation(card.id)}
-                      className="w-full text-left bg-white border border-border rounded-xl p-3.5 hover:border-[#6c47ff]/30 transition-colors opacity-70"
+              {/* Message bubble */}
+              <div className="flex-1 max-w-[600px]">
+                {/* Sender + time */}
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span className="text-[11px] font-semibold text-foreground">{displayName}</span>
+                  <AiBadge />
+                  <span className="text-[10px] text-muted-foreground ml-auto">{card.time}</span>
+                </div>
+
+                {/* Escalation message card */}
+                <div
+                  className={cn(
+                    "rounded-xl border px-4 py-3 transition-colors cursor-pointer",
+                    isNeedsAttention
+                      ? "bg-[#fffbf0] border-[#f5e6c8] hover:border-[#e8d4a8]"
+                      : "bg-white border-border hover:border-gray-300"
+                  )}
+                  onClick={() => setSelectedEscalation(isExpanded ? null : card.id)}
+                >
+                  {/* Status + ticket header */}
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-[9px] font-bold h-5 py-0",
+                        isNeedsAttention
+                          ? "border-amber-200 text-amber-700 bg-amber-50"
+                          : "border-green-200 text-green-600 bg-green-50"
+                      )}
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Badge variant="outline" className="text-[9px] font-bold border-green-200 text-green-600 bg-green-50 h-5 py-0">
-                          Resolved
-                        </Badge>
-                        <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
-                        <span className="text-[11px] text-muted-foreground ml-auto">{card.time}</span>
-                      </div>
-                      <p className="text-[12px] text-foreground">{card.subject}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="animate-in fade-in slide-in-from-right-2 duration-200">
-            <button
-              onClick={() => setSelectedEscalation(null)}
-              className="text-[12px] text-[#6c47ff] hover:underline mb-3 flex items-center gap-1"
-            >
-              &larr; Back to feed
-            </button>
-            {selectedCard && (
-              <div className="bg-white border border-border rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className={cn(
-                    "text-[9px] font-bold h-5 py-0",
-                    selectedCard.status === "needs_attention" ? "border-red-200 text-red-600 bg-red-50" : "border-green-200 text-green-600 bg-green-50"
-                  )}>
-                    {selectedCard.priority}
-                  </Badge>
-                  <span className="text-[13px] font-semibold">{selectedCard.ticketId}</span>
-                  <span className="text-[11px] text-muted-foreground ml-auto">{selectedCard.time}</span>
-                </div>
-                <h3 className="text-[14px] font-semibold mb-2">{selectedCard.subject}</h3>
-                <p className="text-[12px] text-muted-foreground mb-3 leading-relaxed">{selectedCard.reason}</p>
-                <div className="border-t border-border pt-3 mt-3 space-y-2">
-                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Conversation Thread</p>
-                  {selectedCard.thread.map((msg, i) => (
-                    <div key={i} className={cn(
-                      "rounded-lg px-3 py-2 text-[12px]",
-                      msg.role === "customer" ? "bg-[#f0f0f0]" : "bg-[#f0edff]"
-                    )}>
-                      <span className="font-semibold text-[11px]">{msg.role === "customer" ? "Customer" : displayName}</span>
-                      {msg.role !== "customer" && <AiBadge />}
-                      <p className="mt-0.5 leading-relaxed">{msg.content}</p>
+                      {isNeedsAttention ? "Escalated" : "Resolved"}
+                    </Badge>
+                    <Badge variant="outline" className="text-[9px] font-bold border-gray-200 text-gray-500 bg-gray-50 h-5 py-0">
+                      {card.priority}
+                    </Badge>
+                    <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
+                  </div>
+
+                  {/* Summary message */}
+                  <p className="text-[13px] text-foreground leading-relaxed mb-1">
+                    {isNeedsAttention ? (
+                      <>I need your help with <span className="font-medium">{card.subject.toLowerCase()}</span>. {card.reason}</>
+                    ) : (
+                      <>Resolved: <span className="font-medium">{card.subject}</span> — {card.summary}</>
+                    )}
+                  </p>
+
+                  {/* Expand hint */}
+                  {!isExpanded && (
+                    <div className="flex items-center gap-1 mt-2">
+                      <MessageCircle size={11} className="text-muted-foreground" />
+                      <span className="text-[10px] text-muted-foreground">
+                        {card.thread.length} messages in thread — click to expand
+                      </span>
                     </div>
-                  ))}
+                  )}
+
+                  {/* Expanded thread */}
+                  {isExpanded && (
+                    <div className="mt-3 pt-3 border-t border-border/60 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Conversation Thread</p>
+                      {card.thread.map((msg, i) => {
+                        const isCustomer = msg.role === "customer";
+                        return (
+                          <div key={i} className={cn("flex gap-2.5 items-start", !isCustomer && "flex-row-reverse")}>
+                            <div
+                              className={cn(
+                                "w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                                isCustomer
+                                  ? "bg-gray-200 text-gray-600"
+                                  : "text-white"
+                              )}
+                              style={!isCustomer ? { background: agent.color } : undefined}
+                            >
+                              {isCustomer ? <User size={10} /> : (hiredRepName ? hiredRepName[0] : "R")}
+                            </div>
+                            <div
+                              className={cn(
+                                "max-w-[85%] rounded-lg px-3 py-2 text-[12px] leading-relaxed",
+                                isCustomer
+                                  ? "bg-[#f0f0f0] text-foreground rounded-tl-sm"
+                                  : "bg-[#f0edff] text-foreground rounded-tr-sm"
+                              )}
+                            >
+                              <span className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
+                                {isCustomer ? "Customer" : displayName}
+                                {!isCustomer && <AiBadge />}
+                              </span>
+                              {msg.content}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Action buttons for needs_attention */}
+                      {isNeedsAttention && (
+                        <div className="flex items-center gap-2 pt-2">
+                          <Button
+                            size="sm"
+                            className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9]"
+                            onClick={(e) => { e.stopPropagation(); toast.info("Taking over ticket — coming soon"); }}
+                          >
+                            Take Over
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-[11px]"
+                            onClick={(e) => { e.stopPropagation(); toast.info("Providing guidance — coming soon"); }}
+                          >
+                            Guide Rep
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          );
+        })}
 
         {chatMessages.map((msg, i) => {
           const isUser = msg.sender === "user";

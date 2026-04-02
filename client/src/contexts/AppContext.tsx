@@ -143,6 +143,7 @@ interface AppState {
   toggleDocInUse: (id: string) => void;
   updateDocument: (id: string, updates: Partial<Document>) => void;
   resetDocuments: () => void;
+  completeSetupDemo: () => void;
 }
 
 const AppContext = createContext<AppState | null>(null);
@@ -269,6 +270,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setExtractedRuleNames([]);
   }, []);
 
+  const completeSetupDemo = useCallback(() => {
+    // Step 1: Complete Zendesk
+    setZendeskRaw({
+      subdomain: "acme-store",
+      authStatus: "success",
+      authError: "",
+      seatStatus: "verified",
+      seatError: "",
+      selectedSeat: "seat-1",
+      availableSeats: [
+        { id: "seat-1", name: "Seel AI Agent", email: "ai@acme.zendesk.com" },
+        { id: "seat-2", name: "Backup Agent", email: "backup@acme.zendesk.com" },
+      ],
+      triggerStatus: "verified",
+      triggerError: "",
+    });
+    // Step 2: Ensure docs exist
+    setDocsData(defaultDocs);
+    setSopUploaded(true);
+    setExtractedRuleNames(["Refund Policy", "Shipping SLA", "Warranty Rules"]);
+    // Step 3: Hire rep
+    setRepHired(true);
+    setHiredRepName("Ava");
+    setRepPersonality("Friendly");
+    // Step 4: Go live
+    setGoLiveMode("training");
+  }, []);
+
   /* ── Setup Progress derived state ── */
   const step1Complete = zendeskConnected;
   const step2Complete = docsData.some((d) => d.status === "Processed" && d.extractedRules);
@@ -306,7 +335,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         agentsData, updateAgent,
         rulesData, updateRule, toggleRule,
         topicsData, updateTopic, addTopic,
-        docsData, addDocument, removeDocument, toggleDocInUse, updateDocument, resetDocuments,
+        docsData, addDocument, removeDocument, toggleDocInUse, updateDocument, resetDocuments, completeSetupDemo,
       }}
     >
       {children}
