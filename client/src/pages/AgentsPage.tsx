@@ -1,9 +1,9 @@
 /*
  * AgentsPage — Team Lead + Rep views
- * Round 7: Setup Progress is the only content when setup incomplete.
- *          No separate wizard mode. Steps link to Settings/Playbook.
+ * Round 10: Team Lead conversational flow, proposal-only cards, ConversationLogSidebar,
+ *           Rep view with Resolve button, textarea chat input.
  */
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useApp } from "@/contexts/AppContext";
 import { dailyDigest, escalationFeed } from "@/lib/data";
 import { cn } from "@/lib/utils";
@@ -12,14 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import {
   Send, User, Crown, ChevronDown,
   ThumbsUp, ThumbsDown,
-  Bot, Settings, Plus, AlertTriangle, Globe,
+  Bot, Settings, Plus, Globe,
   FileText, UserPlus, Rocket,
-  CheckCircle2, Lock, ArrowRight, MessageCircle, Clock,
+  CheckCircle2, Lock, ArrowRight, MessageCircle, Inbox,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
+import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 import { toast } from "sonner";
 
-/* AI Badge */
+/* ── AI Badge ── */
 function AiBadge() {
   return (
     <span className="inline-flex items-center px-1.5 py-0 rounded text-[9px] font-bold tracking-wider bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-600 border border-indigo-200/60 ml-1.5 select-none">
@@ -28,60 +29,68 @@ function AiBadge() {
   );
 }
 
-/* Render markdown-ish text */
-function RichText({ text }: { text: string }) {
+/* ── Auto-expanding Chat Input ── */
+function ChatInput({ value, onChange, onSend, placeholder }: {
+  value: string;
+  onChange: (v: string) => void;
+  onSend: () => void;
+  placeholder: string;
+}) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      onSend();
+    }
+  };
+
+  // Auto-resize
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const lineHeight = 20;
+    const maxLines = 4;
+    const maxH = lineHeight * maxLines + 16; // padding
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+  }, [value]);
+
   return (
-    <>
-      {text.split("\n").map((line, i) => {
-        if (line.startsWith("**") && line.endsWith("**")) {
-          return <p key={i} className="font-semibold mt-2 first:mt-0">{line.replace(/\*\*/g, "")}</p>;
-        }
-        if (line.startsWith("> ")) {
-          return (
-            <blockquote key={i} className="border-l-2 border-[#d4a574] pl-3 my-2 text-[12px] text-muted-foreground italic">
-              {line.replace(/^> \*?/, "").replace(/\*$/, "")}
-            </blockquote>
-          );
-        }
-        if (line.match(/^\d+\./)) return <p key={i} className="ml-2">{line}</p>;
-        if (line.startsWith("\u2022") || line.startsWith("- ")) return <p key={i} className="ml-2">{line}</p>;
-        if (line.startsWith("+")) return <p key={i} className="ml-2 text-muted-foreground">{line}</p>;
-        if (line.trim() === "") return <br key={i} />;
-        return <p key={i}>{line}</p>;
-      })}
-    </>
+    <div className="px-5 py-3 border-t border-border bg-white">
+      <div className="flex items-end gap-2">
+        <textarea
+          ref={ref}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          rows={1}
+          className="flex-1 min-h-[36px] max-h-[96px] px-3 py-2 rounded-lg border border-border bg-white text-[13px] leading-5 resize-none focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
+        />
+        <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9] shrink-0" onClick={onSend}>
+          <Send size={14} />
+        </Button>
+      </div>
+    </div>
   );
 }
 
-/* COLLAPSIBLE TOPIC CARD */
-function TopicCard({ topic, onAccept, onReject, onReply }: {
-  topic: { id: string; type: string; badge: string; confidence?: string; title: string; summary: string; ruleContent?: string; currentRuleContent?: string; sourceTickets: string[]; status: string };
+/* ── PROPOSAL CARD (default expanded, no question type, no Reply) ── */
+function ProposalCard({ topic, onAccept, onReject, onTicketClick }: {
+  topic: { id: string; badge: string; confidence?: string; title: string; summary: string; ruleContent?: string; currentRuleContent?: string; sourceTickets: string[]; status: string };
   onAccept: () => void;
   onReject: () => void;
-  onReply: () => void;
+  onTicketClick: (ticketId: string) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-
-  const badgeColor = topic.type === "proposal"
-    ? "border-[#6c47ff] text-[#6c47ff] bg-[#f0edff]"
-    : topic.type === "document-parse"
-    ? "border-green-500 text-green-600 bg-green-50"
-    : "border-amber-500 text-amber-600 bg-amber-50";
+  const [ruleExpanded, setRuleExpanded] = useState(false);
+  const [currentRuleExpanded, setCurrentRuleExpanded] = useState(false);
 
   return (
-    <div className="bg-white border border-border rounded-xl overflow-hidden transition-all duration-200 hover:border-[#d4d4d8]">
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="w-full text-left px-4 py-3 flex items-center gap-3 group"
-      >
-        <ChevronDown
-          size={14}
-          className={cn(
-            "text-muted-foreground transition-transform duration-200 shrink-0",
-            !expanded && "-rotate-90"
-          )}
-        />
-        <Badge variant="outline" className={cn("text-[9px] font-bold uppercase tracking-wider shrink-0 py-0 h-5", badgeColor)}>
+    <div className="bg-white border border-border rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center gap-2">
+        <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider shrink-0 py-0 h-5 border-[#6c47ff] text-[#6c47ff] bg-[#f0edff]">
           {topic.badge}
         </Badge>
         {topic.confidence && (
@@ -89,62 +98,93 @@ function TopicCard({ topic, onAccept, onReject, onReply }: {
             {topic.confidence}
           </Badge>
         )}
-        <span className="text-[13px] font-medium text-foreground truncate flex-1">{topic.title}</span>
+        <span className="text-[13px] font-medium text-foreground flex-1">{topic.title}</span>
         {topic.status === "pending" && (
           <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
         )}
-      </button>
+      </div>
 
-      {expanded && (
-        <div className="px-4 pb-4 pt-0 border-t border-border/50 animate-in fade-in slide-in-from-top-1 duration-200">
-          <p className="text-[12px] text-muted-foreground leading-relaxed mt-3 mb-3">{topic.summary}</p>
+      {/* Body — always expanded */}
+      <div className="px-4 pb-4 pt-0 border-t border-border/50">
+        <p className="text-[12px] text-muted-foreground leading-relaxed mt-3 mb-3">{topic.summary}</p>
 
-          {topic.ruleContent && (
-            <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
-              <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
-                {topic.currentRuleContent ? "Proposed Change" : "Proposed Rule"}
-              </p>
-              <pre className="text-[11px] text-foreground whitespace-pre-wrap font-mono leading-relaxed">{topic.ruleContent}</pre>
-            </div>
-          )}
-
-          {topic.currentRuleContent && (
-            <div className="bg-[#fafafa] border border-[#e5e7eb] rounded-lg p-3 mb-3 opacity-70">
-              <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Current Rule</p>
-              <pre className="text-[11px] text-foreground whitespace-pre-wrap font-mono leading-relaxed">{topic.currentRuleContent}</pre>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3">
-            <span>Source: {topic.sourceTickets.length} tickets</span>
-            <span>&middot;</span>
-            {topic.sourceTickets.slice(0, 2).map((t) => (
-              <Badge key={t} variant="secondary" className="text-[9px] h-4 px-1.5">{t}</Badge>
-            ))}
-            {topic.sourceTickets.length > 2 && <span>+{topic.sourceTickets.length - 2} more</span>}
+        {/* Proposed rule — line-clamp with expand */}
+        {topic.ruleContent && (
+          <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">
+              {topic.currentRuleContent ? "Proposed Change" : "Proposed Rule"}
+            </p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
+              !ruleExpanded && "line-clamp-3"
+            )}>
+              {topic.ruleContent}
+            </p>
+            {topic.ruleContent.split("\n").length > 3 && !ruleExpanded && (
+              <button
+                onClick={() => setRuleExpanded(true)}
+                className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1"
+              >
+                Show full rule
+              </button>
+            )}
           </div>
+        )}
 
-          {topic.status === "pending" && (
-            <div className="flex gap-2">
-              <Button size="sm" className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={onAccept}>
-                <ThumbsUp size={11} className="mr-1" /> Accept
-              </Button>
-              <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={onReply}>
-                Reply
-              </Button>
-              <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground" onClick={onReject}>
-                <ThumbsDown size={11} className="mr-1" /> Reject
-              </Button>
-            </div>
-          )}
-          {topic.status === "accepted" && (
-            <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px]">Accepted</Badge>
-          )}
-          {topic.status === "rejected" && (
-            <Badge className="bg-red-50 text-red-600 border-red-200 text-[10px]">Rejected</Badge>
-          )}
+        {/* Current rule */}
+        {topic.currentRuleContent && (
+          <div className="bg-[#fafafa] border border-[#e5e7eb] rounded-lg p-3 mb-3 opacity-70">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">Current Rule</p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
+              !currentRuleExpanded && "line-clamp-3"
+            )}>
+              {topic.currentRuleContent}
+            </p>
+            {topic.currentRuleContent.split("\n").length > 3 && !currentRuleExpanded && (
+              <button
+                onClick={() => setCurrentRuleExpanded(true)}
+                className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1"
+              >
+                Show full rule
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Source tickets — clickable links */}
+        <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3 flex-wrap">
+          <span>Source: {topic.sourceTickets.length} tickets</span>
+          <span>&middot;</span>
+          {topic.sourceTickets.map((t) => (
+            <button
+              key={t}
+              onClick={() => onTicketClick(t)}
+              className="text-[10px] text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2 font-medium"
+            >
+              {t}
+            </button>
+          ))}
         </div>
-      )}
+
+        {/* Action buttons — Accept / Reject only */}
+        {topic.status === "pending" && (
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={onAccept}>
+              <ThumbsUp size={11} className="mr-1" /> Accept
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground" onClick={onReject}>
+              <ThumbsDown size={11} className="mr-1" /> Reject
+            </Button>
+          </div>
+        )}
+        {topic.status === "accepted" && (
+          <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px]">Accepted</Badge>
+        )}
+        {topic.status === "rejected" && (
+          <Badge className="bg-red-50 text-red-600 border-red-200 text-[10px]">Rejected</Badge>
+        )}
+      </div>
     </div>
   );
 }
@@ -209,7 +249,6 @@ function SetupProgress() {
       locked: step4Status === "locked",
       action: () => {
         if (step4Status === "locked") return;
-        // Switch to rep view and trigger guide
         setSelectedAgentId("agent-alpha");
         if (!goLiveGuideShown) {
           setShowGoLiveGuide(true);
@@ -243,7 +282,7 @@ function SetupProgress() {
           </div>
         </div>
 
-        {/* Demo: Reset Documents */}
+        {/* Demo controls */}
         <div className="flex items-center justify-center gap-2 mb-4">
           <span className="text-[10px] text-gray-400 uppercase tracking-wider">Demo:</span>
           <button
@@ -279,7 +318,6 @@ function SetupProgress() {
                     : "bg-white border-gray-200 hover:border-indigo-300 hover:shadow-sm cursor-pointer"
                 )}
               >
-                {/* Status icon */}
                 <div className={cn(
                   "w-10 h-10 rounded-full flex items-center justify-center shrink-0",
                   step.complete ? "bg-green-100" : step.locked ? "bg-gray-100" : "bg-indigo-50"
@@ -292,8 +330,6 @@ function SetupProgress() {
                     <Icon className="w-5 h-5 text-indigo-600" />
                   )}
                 </div>
-
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className={cn(
@@ -313,8 +349,6 @@ function SetupProgress() {
                     {step.description}
                   </p>
                 </div>
-
-                {/* Arrow */}
                 {!step.complete && !step.locked && (
                   <ArrowRight className="w-4 h-4 text-gray-400 shrink-0" />
                 )}
@@ -328,15 +362,20 @@ function SetupProgress() {
 }
 
 /* ================================================================
-   TEAM LEAD VIEW — normal mode with digest, topics, escalation
+   TEAM LEAD VIEW — conversational message flow
+   Daily Digest + Proposals appear as messages from Alex
    ================================================================ */
 function TeamLeadView() {
   const { topicsData, updateTopic, hiredRepName } = useApp();
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [sidebarTicketId, setSidebarTicketId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const handleSendChat = () => {
+  // Only proposals (filter out question type)
+  const proposals = topicsData.filter((t) => t.type === "proposal");
+
+  const handleSendChat = useCallback(() => {
     if (!inputValue.trim()) return;
     setChatMessages((prev) => [...prev, { sender: "user", text: inputValue }]);
     setInputValue("");
@@ -346,7 +385,7 @@ function TeamLeadView() {
         { sender: "alex", text: `I'll look into that. Let me analyze the relevant ticket data and get back to you with findings.` },
       ]);
     }, 1000);
-  };
+  }, [inputValue]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -368,61 +407,70 @@ function TeamLeadView() {
         </div>
       </div>
 
-      {/* Content */}
+      {/* Content — conversational flow */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        {/* Daily Digest */}
-        <div className="bg-white border border-border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center">
-              <Crown size={12} className="text-indigo-600" />
+
+        {/* ── Message 1: Daily Digest ── */}
+        <div className="flex gap-3 items-start">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5" style={{ background: teamLead.color }}>
+            <Crown size={12} />
+          </div>
+          <div className="flex-1 max-w-[640px]">
+            <div className="flex items-center gap-1.5 mb-1">
+              <span className="text-[11px] font-semibold text-foreground">{teamLead.name}</span>
+              <AiBadge />
+              <span className="text-[10px] text-muted-foreground ml-auto">{dailyDigest.date}</span>
             </div>
-            <span className="text-[13px] font-semibold">Daily Digest</span>
-            <span className="text-[11px] text-muted-foreground ml-auto">{dailyDigest.date}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-3 mb-3">
-            {[
-              { label: "Tickets", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets },
-              { label: "Resolution", value: dailyDigest.resolutionRate, trend: dailyDigest.deltaResolution },
-              { label: "CSAT", value: dailyDigest.csatScore, trend: dailyDigest.deltaCsat },
-              { label: "Avg Response", value: dailyDigest.avgResponseTime, trend: dailyDigest.deltaRt },
-            ].map((stat) => (
-              <div key={stat.label} className="bg-[#f8f9fa] rounded-lg p-2.5 text-center">
-                <p className="text-[18px] font-bold text-foreground">{stat.value}</p>
-                <p className="text-[10px] text-muted-foreground">{stat.label}</p>
-                {stat.trend && (
-                  <p className={cn("text-[10px] font-medium", stat.trend.startsWith("+") || stat.trend.startsWith("-") ? (stat.trend.startsWith("+") ? "text-green-600" : "text-red-500") : "text-gray-500")}>
-                    {stat.trend}
-                  </p>
-                )}
+            <div className="bg-white border border-border rounded-xl p-4">
+              <p className="text-[13px] font-semibold mb-3">Daily Digest</p>
+              <div className="grid grid-cols-4 gap-3 mb-3">
+                {[
+                  { label: "Tickets", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets },
+                  { label: "Resolution", value: dailyDigest.resolutionRate, trend: dailyDigest.deltaResolution },
+                  { label: "CSAT", value: dailyDigest.csatScore, trend: dailyDigest.deltaCsat },
+                  { label: "Avg Response", value: dailyDigest.avgResponseTime, trend: dailyDigest.deltaRt },
+                ].map((stat) => (
+                  <div key={stat.label} className="bg-[#f8f9fa] rounded-lg p-2.5 text-center">
+                    <p className="text-[18px] font-bold text-foreground">{stat.value}</p>
+                    <p className="text-[10px] text-muted-foreground">{stat.label}</p>
+                    {stat.trend && (
+                      <p className={cn("text-[10px] font-medium", stat.trend.startsWith("+") || stat.trend.startsWith("-") ? (stat.trend.startsWith("+") ? "text-green-600" : "text-red-500") : "text-gray-500")}>
+                        {stat.trend}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="text-[12px] text-muted-foreground leading-relaxed">
-            <p>Handled {dailyDigest.totalTickets} tickets today. Resolution rate at {dailyDigest.resolutionRate} ({dailyDigest.deltaResolution}). CSAT score: {dailyDigest.csatScore}. Average response time: {dailyDigest.avgResponseTime} ({dailyDigest.deltaRt}). Sentiment change rate: {dailyDigest.sentimentChangedRate}. Full resolution time: {dailyDigest.fullResolutionTime} ({dailyDigest.deltaFrt}).</p>
+              <p className="text-[12px] text-muted-foreground leading-relaxed">
+                Handled {dailyDigest.totalTickets} tickets today. Resolution rate at {dailyDigest.resolutionRate} ({dailyDigest.deltaResolution}). CSAT score: {dailyDigest.csatScore}. Average response time: {dailyDigest.avgResponseTime} ({dailyDigest.deltaRt}). Sentiment change rate: {dailyDigest.sentimentChangedRate}. Full resolution time: {dailyDigest.fullResolutionTime} ({dailyDigest.deltaFrt}).
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Topics */}
-        {topicsData.length > 0 && (
-          <div>
-            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-              Topics & Proposals ({topicsData.filter((t) => t.status === "pending").length} pending)
-            </p>
-            <div className="space-y-2">
-              {topicsData.map((topic) => (
-                <TopicCard
-                  key={topic.id}
-                  topic={topic}
-                  onAccept={() => { updateTopic(topic.id, { status: "accepted" }); toast.success("Accepted"); }}
-                  onReject={() => { updateTopic(topic.id, { status: "rejected" }); toast.success("Rejected"); }}
-                  onReply={() => toast.info("Reply thread — coming soon")}
-                />
-              ))}
+        {/* ── Messages 2+: Proposal cards ── */}
+        {proposals.map((topic) => (
+          <div key={topic.id} className="flex gap-3 items-start">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5" style={{ background: teamLead.color }}>
+              <Crown size={12} />
+            </div>
+            <div className="flex-1 max-w-[640px]">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="text-[11px] font-semibold text-foreground">{teamLead.name}</span>
+                <AiBadge />
+                <span className="text-[10px] text-muted-foreground ml-auto">Today</span>
+              </div>
+              <ProposalCard
+                topic={topic}
+                onAccept={() => { updateTopic(topic.id, { status: "accepted" }); toast.success("Accepted"); }}
+                onReject={() => { updateTopic(topic.id, { status: "rejected" }); toast.success("Rejected"); }}
+                onTicketClick={(ticketId) => setSidebarTicketId(ticketId)}
+              />
             </div>
           </div>
-        )}
+        ))}
 
-        {/* Chat messages */}
+        {/* ── User chat messages ── */}
         {chatMessages.map((msg, i) => {
           const isUser = msg.sender === "user";
           return (
@@ -433,7 +481,7 @@ function TeamLeadView() {
                 </div>
               ) : (
                 <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ background: teamLead.color }}>
-                  {teamLead.initials}
+                  <Crown size={12} />
                 </div>
               )}
               <div className={cn(
@@ -453,28 +501,22 @@ function TeamLeadView() {
         })}
       </div>
 
-      {/* Chat Input */}
-      <div className="px-5 py-3 border-t border-border bg-white">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-            placeholder="Message Alex..."
-            className="flex-1 h-9 px-3 rounded-lg border border-border bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
-          />
-          <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9]" onClick={handleSendChat}>
-            <Send size={14} />
-          </Button>
-        </div>
-      </div>
+      {/* Chat Input — textarea */}
+      <ChatInput
+        value={inputValue}
+        onChange={setInputValue}
+        onSend={handleSendChat}
+        placeholder="Message Alex..."
+      />
+
+      {/* ConversationLogSidebar */}
+      <ConversationLogSidebar ticketId={sidebarTicketId} onClose={() => setSidebarTicketId(null)} />
     </div>
   );
 }
 
 /* ================================================================
-   REP VIEW — conversation + escalation feed
+   REP VIEW — conversational escalation feed with Resolve
    ================================================================ */
 function RepView({ agentId }: { agentId: string }) {
   const {
@@ -487,13 +529,15 @@ function RepView({ agentId }: { agentId: string }) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
   const [selectedEscalation, setSelectedEscalation] = useState<string | null>(null);
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState("");
+  const [sidebarTicketId, setSidebarTicketId] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const zdOk = zendeskConnected;
 
-  const handleSendChat = () => {
+  const handleSendChat = useCallback(() => {
     if (!inputValue.trim()) return;
     setChatMessages((prev) => [...prev, { sender: "user", text: inputValue }]);
     setInputValue("");
@@ -503,7 +547,7 @@ function RepView({ agentId }: { agentId: string }) {
         { sender: "rep", text: `Got it! I'll handle that right away. Is there anything else you'd like me to focus on?` },
       ]);
     }, 1000);
-  };
+  }, [inputValue]);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -524,7 +568,12 @@ function RepView({ agentId }: { agentId: string }) {
     toast.success(`Mode changed to ${mode}`);
   };
 
-  // All escalations in chronological order (needs_attention first, then resolved)
+  const handleResolve = (id: string) => {
+    setResolvedIds((prev) => new Set(prev).add(id));
+    toast.success("Escalation marked as resolved");
+  };
+
+  // All escalations: needs_attention first, then resolved
   const allEscalations = [
     ...escalationFeed.filter((c) => c.status === "needs_attention"),
     ...escalationFeed.filter((c) => c.status === "resolved"),
@@ -545,7 +594,7 @@ function RepView({ agentId }: { agentId: string }) {
           <span className="text-[12px] text-muted-foreground ml-2">AI Support Rep</span>
         </div>
 
-        {/* Go Live Mode — status badge + dropdown */}
+        {/* Go Live Mode */}
         <div className="relative">
           <button
             onClick={() => setShowModeDropdown(!showModeDropdown)}
@@ -652,12 +701,27 @@ function RepView({ agentId }: { agentId: string }) {
 
       {/* Content — Conversational Escalation Feed */}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        {/* Chronological escalation messages */}
+        {/* Empty state */}
+        {allEscalations.length === 0 && chatMessages.length === 0 && (
+          <div className="flex-1 flex flex-col items-center justify-center py-20 text-center">
+            <div className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center mb-3">
+              <Inbox size={20} className="text-green-500" />
+            </div>
+            <p className="text-[14px] font-medium text-foreground mb-1">All caught up</p>
+            <p className="text-[12px] text-muted-foreground">No escalations right now</p>
+          </div>
+        )}
+
+        {/* Escalation messages */}
         {allEscalations.map((card) => {
-          const isNeedsAttention = card.status === "needs_attention";
+          const isUserResolved = resolvedIds.has(card.id);
+          const isOriginallyResolved = card.status === "resolved";
+          const isResolved = isUserResolved || isOriginallyResolved;
+          const isNeedsAttention = !isResolved;
           const isExpanded = selectedEscalation === card.id;
+
           return (
-            <div key={card.id} className="flex gap-3 items-start">
+            <div key={card.id} className={cn("flex gap-3 items-start transition-opacity", isResolved && "opacity-60")}>
               {/* Rep avatar */}
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
@@ -691,22 +755,31 @@ function RepView({ agentId }: { agentId: string }) {
                       variant="outline"
                       className={cn(
                         "text-[9px] font-bold h-5 py-0",
-                        isNeedsAttention
-                          ? "border-amber-200 text-amber-700 bg-amber-50"
-                          : "border-green-200 text-green-600 bg-green-50"
+                        isResolved
+                          ? "border-green-200 text-green-600 bg-green-50"
+                          : "border-amber-200 text-amber-700 bg-amber-50"
                       )}
                     >
-                      {isNeedsAttention ? "Escalated" : "Resolved"}
+                      {isResolved ? "Resolved" : "Escalated"}
                     </Badge>
                     <Badge variant="outline" className="text-[9px] font-bold border-gray-200 text-gray-500 bg-gray-50 h-5 py-0">
                       {card.priority}
                     </Badge>
-                    <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
+                    {/* Ticket ID — clickable link */}
+                    <button
+                      className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSidebarTicketId(card.ticketId);
+                      }}
+                    >
+                      {card.ticketId}
+                    </button>
                   </div>
 
                   {/* Summary message */}
                   <p className="text-[13px] text-foreground leading-relaxed mb-1">
-                    {isNeedsAttention ? (
+                    {isNeedsAttention && !isUserResolved ? (
                       <>I need your help with <span className="font-medium">{card.subject.toLowerCase()}</span>. {card.reason}</>
                     ) : (
                       <>Resolved: <span className="font-medium">{card.subject}</span> — {card.summary}</>
@@ -760,23 +833,15 @@ function RepView({ agentId }: { agentId: string }) {
                         );
                       })}
 
-                      {/* Action buttons for needs_attention */}
+                      {/* Resolve button for unresolved escalations */}
                       {isNeedsAttention && (
                         <div className="flex items-center gap-2 pt-2">
                           <Button
                             size="sm"
                             className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9]"
-                            onClick={(e) => { e.stopPropagation(); toast.info("Taking over ticket — coming soon"); }}
+                            onClick={(e) => { e.stopPropagation(); handleResolve(card.id); }}
                           >
-                            Take Over
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="h-7 text-[11px]"
-                            onClick={(e) => { e.stopPropagation(); toast.info("Providing guidance — coming soon"); }}
-                          >
-                            Guide Rep
+                            <CheckCircle2 size={11} className="mr-1" /> Resolve
                           </Button>
                         </div>
                       )}
@@ -788,6 +853,7 @@ function RepView({ agentId }: { agentId: string }) {
           );
         })}
 
+        {/* User chat messages */}
         {chatMessages.map((msg, i) => {
           const isUser = msg.sender === "user";
           return (
@@ -818,28 +884,22 @@ function RepView({ agentId }: { agentId: string }) {
         })}
       </div>
 
-      {/* Chat Input */}
-      <div className="px-5 py-3 border-t border-border bg-white">
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-            placeholder={`Message ${displayName}...`}
-            className="flex-1 h-9 px-3 rounded-lg border border-border bg-white text-[13px] focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30 focus:border-[#6c47ff]"
-          />
-          <Button size="sm" className="h-9 w-9 p-0 bg-[#6c47ff] hover:bg-[#5a3ad9]" onClick={handleSendChat}>
-            <Send size={14} />
-          </Button>
-        </div>
-      </div>
+      {/* Chat Input — textarea */}
+      <ChatInput
+        value={inputValue}
+        onChange={setInputValue}
+        onSend={handleSendChat}
+        placeholder={`Message ${displayName}...`}
+      />
 
       <AgentProfileSheet
         agent={agent}
         open={profileOpen}
         onOpenChange={setProfileOpen}
       />
+
+      {/* ConversationLogSidebar */}
+      <ConversationLogSidebar ticketId={sidebarTicketId} onClose={() => setSidebarTicketId(null)} />
     </div>
   );
 }
@@ -859,7 +919,6 @@ function NormalView() {
   const nonLeadAgents = agentsData.filter((a) => !a.isTeamLead);
   const teamLead = agentsData.find((a) => a.id === "team-lead")!;
 
-  /* Status dot color for sidebar */
   const modeDotColor = goLiveMode === "production" ? "bg-green-500" : goLiveMode === "training" ? "bg-blue-500" : "bg-gray-400";
 
   return (
