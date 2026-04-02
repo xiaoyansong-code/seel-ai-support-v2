@@ -14,7 +14,7 @@ import {
   ThumbsUp, ThumbsDown,
   Bot, Settings, Plus, Globe,
   FileText, UserPlus, Rocket,
-  CheckCircle2, Lock, ArrowRight, MessageCircle, Inbox,
+  CheckCircle2, Lock, ArrowRight, Inbox, ExternalLink,
 } from "lucide-react";
 import AgentProfileSheet from "@/components/AgentProfileSheet";
 import ConversationLogSidebar from "@/components/ConversationLogSidebar";
@@ -521,14 +521,13 @@ function TeamLeadView() {
 function RepView({ agentId }: { agentId: string }) {
   const {
     agentsData, hiredRepName, goLiveMode, setGoLiveMode,
-    zendeskConnected,
+    zendeskConnected, zendesk,
     showGoLiveGuide, setShowGoLiveGuide,
     setShowSettings, setSettingsSection,
   } = useApp();
   const agent = agentsData.find((a) => a.id === agentId) || agentsData[1];
   const [profileOpen, setProfileOpen] = useState(false);
   const [showModeDropdown, setShowModeDropdown] = useState(false);
-  const [selectedEscalation, setSelectedEscalation] = useState<string | null>(null);
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<{ sender: string; text: string }[]>([]);
   const [inputValue, setInputValue] = useState("");
@@ -718,10 +717,14 @@ function RepView({ agentId }: { agentId: string }) {
           const isOriginallyResolved = card.status === "resolved";
           const isResolved = isUserResolved || isOriginallyResolved;
           const isNeedsAttention = !isResolved;
-          const isExpanded = selectedEscalation === card.id;
+
+          // Build Zendesk ticket URL
+          const zendeskUrl = zendesk.subdomain
+            ? `https://${zendesk.subdomain}.zendesk.com/agent/tickets/${card.ticketId.replace("#", "")}`
+            : null;
 
           return (
-            <div key={card.id} className={cn("flex gap-3 items-start transition-opacity", isResolved && "opacity-60")}>
+            <div key={card.id} className={cn("flex gap-3 items-start transition-opacity", isResolved && "opacity-50")}>
               {/* Rep avatar */}
               <div
                 className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-0.5"
@@ -739,114 +742,59 @@ function RepView({ agentId }: { agentId: string }) {
                   <span className="text-[10px] text-muted-foreground ml-auto">{card.time}</span>
                 </div>
 
-                {/* Escalation message card */}
+                {/* Escalation message card — flat, no expand/collapse */}
                 <div
                   className={cn(
-                    "rounded-xl border px-4 py-3 transition-colors cursor-pointer",
+                    "rounded-xl border px-4 py-3",
                     isNeedsAttention
-                      ? "bg-[#fffbf0] border-[#f5e6c8] hover:border-[#e8d4a8]"
-                      : "bg-white border-border hover:border-gray-300"
+                      ? "bg-[#fffbf0] border-[#f5e6c8]"
+                      : "bg-white border-border"
                   )}
-                  onClick={() => setSelectedEscalation(isExpanded ? null : card.id)}
                 >
-                  {/* Status + ticket header */}
+                  {/* Ticket ID + status line */}
                   <div className="flex items-center gap-2 mb-1.5">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-[9px] font-bold h-5 py-0",
-                        isResolved
-                          ? "border-green-200 text-green-600 bg-green-50"
-                          : "border-amber-200 text-amber-700 bg-amber-50"
-                      )}
-                    >
+                    {/* Ticket ID — link to Zendesk */}
+                    {zendeskUrl ? (
+                      <a
+                        href={zendeskUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {card.ticketId}
+                      </a>
+                    ) : (
+                      <span className="text-[12px] font-semibold text-foreground">{card.ticketId}</span>
+                    )}
+                    <span className={cn(
+                      "text-[11px] font-medium",
+                      isResolved ? "text-green-600" : "text-amber-600"
+                    )}>
                       {isResolved ? "Resolved" : "Escalated"}
-                    </Badge>
-                    <Badge variant="outline" className="text-[9px] font-bold border-gray-200 text-gray-500 bg-gray-50 h-5 py-0">
-                      {card.priority}
-                    </Badge>
-                    {/* Ticket ID — clickable link */}
-                    <button
-                      className="text-[12px] font-semibold text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSidebarTicketId(card.ticketId);
-                      }}
-                    >
-                      {card.ticketId}
-                    </button>
+                    </span>
+
+                    {/* Resolve button — on the card, right side */}
+                    {isNeedsAttention && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px] px-2.5 ml-auto border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                        onClick={(e) => { e.stopPropagation(); handleResolve(card.id); }}
+                      >
+                        <CheckCircle2 size={10} className="mr-1" /> Resolve
+                      </Button>
+                    )}
                   </div>
 
                   {/* Summary message */}
-                  <p className="text-[13px] text-foreground leading-relaxed mb-1">
+                  <p className="text-[13px] text-foreground leading-relaxed">
                     {isNeedsAttention && !isUserResolved ? (
                       <>I need your help with <span className="font-medium">{card.subject.toLowerCase()}</span>. {card.reason}</>
                     ) : (
                       <>Resolved: <span className="font-medium">{card.subject}</span> — {card.summary}</>
                     )}
                   </p>
-
-                  {/* Expand hint */}
-                  {!isExpanded && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <MessageCircle size={11} className="text-muted-foreground" />
-                      <span className="text-[10px] text-muted-foreground">
-                        {card.thread.length} messages in thread — click to expand
-                      </span>
-                    </div>
-                  )}
-
-                  {/* Expanded thread */}
-                  {isExpanded && (
-                    <div className="mt-3 pt-3 border-t border-border/60 space-y-2.5 animate-in fade-in slide-in-from-top-1 duration-200">
-                      <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Conversation Thread</p>
-                      {card.thread.map((msg, i) => {
-                        const isCustomer = msg.role === "customer";
-                        return (
-                          <div key={i} className={cn("flex gap-2.5 items-start", !isCustomer && "flex-row-reverse")}>
-                            <div
-                              className={cn(
-                                "w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
-                                isCustomer
-                                  ? "bg-gray-200 text-gray-600"
-                                  : "text-white"
-                              )}
-                              style={!isCustomer ? { background: agent.color } : undefined}
-                            >
-                              {isCustomer ? <User size={10} /> : (hiredRepName ? hiredRepName[0] : "R")}
-                            </div>
-                            <div
-                              className={cn(
-                                "max-w-[85%] rounded-lg px-3 py-2 text-[12px] leading-relaxed",
-                                isCustomer
-                                  ? "bg-[#f0f0f0] text-foreground rounded-tl-sm"
-                                  : "bg-[#f0edff] text-foreground rounded-tr-sm"
-                              )}
-                            >
-                              <span className="text-[10px] font-semibold text-muted-foreground block mb-0.5">
-                                {isCustomer ? "Customer" : displayName}
-                                {!isCustomer && <AiBadge />}
-                              </span>
-                              {msg.content}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {/* Resolve button for unresolved escalations */}
-                      {isNeedsAttention && (
-                        <div className="flex items-center gap-2 pt-2">
-                          <Button
-                            size="sm"
-                            className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9]"
-                            onClick={(e) => { e.stopPropagation(); handleResolve(card.id); }}
-                          >
-                            <CheckCircle2 size={11} className="mr-1" /> Resolve
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
