@@ -122,6 +122,7 @@ export interface Rule {
   description: string;
   content: string;
   source: string;
+  sourceDocId?: string;
   lastUpdated: string;
   stats: { used: number; avgCsat: number; deflection: number };
   versionHistory: { version: number; timestamp: string; source: string; diff: string }[];
@@ -303,6 +304,7 @@ export const rules: Rule[] = [
     description: "When a customer asks about order status, look up the order in Shopify and provide tracking information.",
     content: "When a customer asks about order status or shipping:\n1. Look up the order in Shopify using order ID or customer email\n2. Retrieve tracking information from the carrier API\n3. Reply with: order status, tracking number, carrier name, estimated delivery date\n4. If the package is delayed beyond the estimated date, apologize and offer to escalate\n5. If no tracking info is available, explain the order is being processed and provide expected ship date",
     source: "Document",
+    sourceDocId: "doc-1",
     lastUpdated: "Mar 24, 2026",
     stats: { used: 487, avgCsat: 4.8, deflection: 97 },
     versionHistory: [
@@ -317,6 +319,7 @@ export const rules: Rule[] = [
     description: "Handle refund requests for delivered items within the return window.",
     content: "When a customer requests a refund:\n1. Verify the order is within the 30-day return window\n2. Check if the item has been returned or is a damaged item (no return required)\n3. If refund amount ≤ agent refund cap, process the refund\n4. If refund amount > cap, escalate to L2 with full context\n5. For VIP customers, skip store credit offer and process direct refund\n6. Confirm refund method and timeline (5-7 business days)",
     source: "Document",
+    sourceDocId: "doc-2",
     lastUpdated: "Mar 24, 2026",
     stats: { used: 312, avgCsat: 4.5, deflection: 88 },
     versionHistory: [
@@ -330,6 +333,7 @@ export const rules: Rule[] = [
     description: "Cancel orders that have not yet been fulfilled and issue full refund.",
     content: "When a customer requests order cancellation:\n1. Look up the order in Shopify\n2. Verify the order status is 'Unfulfilled' or 'Processing'\n3. If unfulfilled: cancel the order and issue a full refund to original payment method\n4. If already shipped: inform customer the order cannot be cancelled and offer return instructions\n5. Confirm cancellation and refund details to customer",
     source: "Document",
+    sourceDocId: "doc-1",
     lastUpdated: "Mar 24, 2026",
     stats: { used: 198, avgCsat: 4.6, deflection: 92 },
     versionHistory: [
@@ -343,6 +347,7 @@ export const rules: Rule[] = [
     description: "Update shipping address for orders not yet dispatched.",
     content: "When a customer requests an address change:\n1. Look up the order in Shopify\n2. Verify the order has not been dispatched\n3. If pre-dispatch: update the shipping address in Shopify\n4. If already dispatched: inform customer the address cannot be changed and suggest contacting the carrier\n5. Confirm the updated address to the customer",
     source: "Document",
+    sourceDocId: "doc-1",
     lastUpdated: "Mar 24, 2026",
     stats: { used: 145, avgCsat: 4.7, deflection: 95 },
     versionHistory: [
@@ -356,6 +361,7 @@ export const rules: Rule[] = [
     description: "Special handling rules for VIP customers including priority routing and direct refunds.",
     content: "For customers tagged as VIP (or 5+ orders, or LTV > $500):\n1. Always prioritize their tickets\n2. Skip store credit offer — process direct refund\n3. Use empathetic, personalized tone\n4. If complaint: escalate immediately to L2\n5. Proactively offer compensation (discount code) for any inconvenience",
     source: "Manager edit",
+    sourceDocId: "doc-1",
     lastUpdated: "Mar 25, 2026",
     stats: { used: 89, avgCsat: 4.9, deflection: 85 },
     versionHistory: [
@@ -370,6 +376,7 @@ export const rules: Rule[] = [
     description: "Escalate when customer sentiment is frustrated or angry.",
     content: "Escalate to human agent when:\n1. Customer sentiment is detected as 'angry' or 'threatening'\n2. Customer explicitly requests a human agent\n3. Customer mentions legal action, lawyer, or trading standards\n4. 3 consecutive turns without resolution\n5. When escalating: leave Internal Note with handoff summary, sentiment analysis, and suggested reply",
     source: "Document",
+    sourceDocId: "doc-3",
     lastUpdated: "Mar 24, 2026",
     stats: { used: 67, avgCsat: 4.2, deflection: 0 },
     versionHistory: [

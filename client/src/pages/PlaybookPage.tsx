@@ -65,7 +65,7 @@ export default function PlaybookPage() {
         ))}
       </div>
 
-      {activeTab === "rules" ? <RulesView /> : <DocumentsView onSwitchToRules={() => setActiveTab("rules")} />}
+      {activeTab === "rules" ? <RulesView onSwitchToDocuments={() => setActiveTab("documents")} /> : <DocumentsView onSwitchToRules={() => setActiveTab("rules")} />}
     </div>
   );
 }
@@ -73,7 +73,7 @@ export default function PlaybookPage() {
 // ============================================================
 // RULES VIEW
 // ============================================================
-function RulesView() {
+function RulesView({ onSwitchToDocuments }: { onSwitchToDocuments: () => void }) {
   const { rulesData, topicsData, updateTopic, setupFullyComplete } = useApp();
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -156,6 +156,10 @@ function RulesView() {
           ruleId={selectedRuleId}
           open={!!selectedRuleId}
           onOpenChange={(open) => !open && setSelectedRuleId(null)}
+          onNavigateToDoc={() => {
+            setSelectedRuleId(null);
+            onSwitchToDocuments();
+          }}
         />
       )}
 
@@ -292,8 +296,8 @@ function PlaybookProposalCard({ topic, onAccept, onReject, onTicketClick }: {
 // ============================================================
 // RULE DETAIL SHEET — Read-only, single view, config history
 // ============================================================
-function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { rulesData } = useApp();
+function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { ruleId: string; open: boolean; onOpenChange: (open: boolean) => void; onNavigateToDoc?: (docId: string) => void }) {
+  const { rulesData, docsData } = useApp();
   const rule = rulesData.find((r) => r.id === ruleId);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -382,8 +386,20 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
                           <span className="text-[11px] text-muted-foreground">{entry.timestamp}</span>
                         </div>
                         <p className="text-[12px] text-muted-foreground mt-0.5">{entry.diff}</p>
-                        <button className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] mt-1 flex items-center gap-1">
-                          {sourceIcon(entry.source)} {entry.source === "Document" ? "Extracted from uploaded document" : entry.source === "Team Lead" ? "Created from Team Lead conversation" : entry.source === "Manager edit" ? "Edited by manager" : entry.source}
+                        <button
+                          onClick={() => {
+                            if (entry.source === "Document" && rule.sourceDocId) onNavigateToDoc?.(rule.sourceDocId);
+                          }}
+                          className={cn(
+                            "text-[11px] mt-1 flex items-center gap-1",
+                            entry.source === "Document" && rule.sourceDocId
+                              ? "text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer"
+                              : "text-muted-foreground cursor-default"
+                          )}
+                        >
+                          {sourceIcon(entry.source)} {entry.source === "Document" && rule.sourceDocId
+                            ? docsData.find(d => d.id === rule.sourceDocId)?.name || "Uploaded document"
+                            : entry.source === "Team Lead" ? "Team Lead conversation" : entry.source === "Manager edit" ? "Manager edit" : entry.source}
                         </button>
                       </div>
                     </div>
@@ -396,7 +412,16 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
           {/* Footer metadata */}
           <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-4 mt-4 border-t border-border">
             <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
-            <button className="text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer">Source: {rule.source === "Document" ? "Uploaded document" : rule.source === "Team Lead" ? "Team Lead conversation" : rule.source === "Manager edit" ? "Manager edit" : rule.source}</button>
+            {rule.source === "Document" && rule.sourceDocId ? (
+              <button
+                onClick={() => onNavigateToDoc?.(rule.sourceDocId!)}
+                className="text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer flex items-center gap-1"
+              >
+                <FileText size={10} /> {docsData.find(d => d.id === rule.sourceDocId)?.name || "Uploaded document"}
+              </button>
+            ) : (
+              <span>Source: {rule.source === "Team Lead" ? "Team Lead conversation" : rule.source === "Manager edit" ? "Manager edit" : rule.source}</span>
+            )}
           </div>
         </div>
       </SheetContent>
