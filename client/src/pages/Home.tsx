@@ -64,15 +64,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Sub-header for Agents tab: TEST MODE badge */}
-        {mainTab === "agents" && !showSettings && (
-          <div className="px-5 py-2 border-b border-border bg-[#fffdf7] flex items-center gap-3">
-            <Badge variant="outline" className="text-[11px] font-bold border-red-400 text-red-600 bg-red-50">
-              TEST MODE
-            </Badge>
-            <span className="text-[11px] text-muted-foreground">This is a prototype. All data is simulated.</span>
-          </div>
-        )}
 
         {/* Content */}
         <div className="flex-1 overflow-hidden bg-[#fafafa]">

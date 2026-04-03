@@ -100,9 +100,7 @@ function ProposalCard({ topic, onAccept, onReject, onTicketClick }: {
           {topic.badge}
         </Badge>
         <span className="text-[13px] font-medium text-foreground flex-1">{topic.title}</span>
-        {topic.status === "pending" && (
-          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
-        )}
+
       </div>
 
       {/* Body */}
@@ -447,7 +445,7 @@ function TeamLeadView() {
               <span className="text-[10px] text-muted-foreground ml-auto">{dailyDigest.date}</span>
             </div>
             <div className="bg-white border border-border rounded-xl p-4">
-              <p className="text-[13px] font-semibold mb-3">Daily Digest</p>
+              <p className="text-[13px] font-semibold mb-3">Daily Digest <span className="text-[11px] font-normal text-muted-foreground ml-1.5">{dailyDigest.date}</span></p>
               <div className="grid grid-cols-3 gap-3 mb-3">
                 {[
                   { label: "Tickets handled", value: String(dailyDigest.totalTickets), trend: dailyDigest.deltaTickets, positive: true },
@@ -474,15 +472,15 @@ function TeamLeadView() {
                 })}
               </div>
               <div className="border-t border-border/50 pt-3">
-                <p className="text-[12px] text-foreground leading-relaxed">
-                  {proposals.filter(t => t.status === "pending").length} items below need your review.
-                </p>
                 <button
                   onClick={() => setMainTab("performance")}
-                  className="text-[12px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1 inline-flex items-center gap-1"
+                  className="text-[12px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium inline-flex items-center gap-1"
                 >
                   View full dashboard <ArrowRight size={12} />
                 </button>
+                <p className="text-[12px] text-muted-foreground leading-relaxed mt-1.5">
+                  {proposals.filter(t => t.status === "pending").length} items below need your review.
+                </p>
               </div>
             </div>
           </div>
