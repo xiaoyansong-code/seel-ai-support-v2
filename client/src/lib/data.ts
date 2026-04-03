@@ -668,7 +668,8 @@ export const performanceSummary: PerformanceKPI[] = [
   { label: "Total Tickets", value: 156, unit: "", trend: 12, trendLabel: "vs previous period" },
   { label: "Auto-Resolution Rate", value: 68, unit: "%", trend: 4, trendLabel: "vs previous period" },
   { label: "Escalation Rate", value: 32, unit: "%", trend: -4, trendLabel: "vs previous period" },
-  { label: "Sentiment Improvement", value: 8.3, unit: "%", trend: -1.1, trendLabel: "vs previous period" },
+  { label: "Sentiment Improve Rate", value: 8.3, unit: "%", trend: -1.1, trendLabel: "vs previous period" },
+  { label: "CSAT Score", value: 4.6, unit: "/5", trend: 0.2, trendLabel: "vs previous period" },
   { label: "Full Resolution Time", value: 750, unit: "s", trend: -130, trendLabel: "vs previous period" },
 ];
 

@@ -32,6 +32,7 @@ import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 
 type TimeRange = "7d" | "14d" | "30d";
 type SubTab = "dashboard" | "conversations";
+type ModeFilter = "all" | "Production" | "Training";
 type OutcomeFilter = "all" | "Resolved" | "Escalated" | "Handling";
 type SortField = "ticketId" | "intent" | "sentiment" | "outcome" | "mode" | "turns" | "time";
 type SortDir = "asc" | "desc";
@@ -85,7 +86,7 @@ function MiniHBar({ value, color = "bg-blue-500" }: { value: number; color?: str
 
 /* ── KPI formatting helpers ── */
 function isPositiveTrend(label: string, trend: number) {
-  if (label === "Full Resolution Time" || label === "Sentiment Improvement" || label === "Escalation Rate") return trend < 0;
+  if (label === "Full Resolution Time" || label === "Sentiment Improve Rate" || label === "Escalation Rate") return trend < 0;
   return trend > 0;
 }
 
@@ -106,6 +107,7 @@ function formatTrend(label: string, trend: number, unit: string) {
 export default function PerformancePage() {
   const [subTab, setSubTab] = useState<SubTab>("dashboard");
   const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [modeFilter, setModeFilter] = useState<ModeFilter>("all");
   const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortField, setSortField] = useState<SortField>("time");
@@ -125,6 +127,7 @@ export default function PerformancePage() {
   // Filter conversation logs
   const filteredLogs = useMemo(() => {
     let logs = [...conversationLogs];
+    if (modeFilter !== "all") logs = logs.filter((l) => l.mode === modeFilter);
     if (outcomeFilter !== "all") logs = logs.filter((l) => l.outcome === outcomeFilter);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -149,7 +152,7 @@ export default function PerformancePage() {
       return sortDir === "desc" ? -cmp : cmp;
     });
     return logs;
-  }, [outcomeFilter, searchQuery, sortField, sortDir]);
+  }, [modeFilter, outcomeFilter, searchQuery, sortField, sortDir]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -204,7 +207,18 @@ export default function PerformancePage() {
                   : "Review all AI-handled conversations."}
               </p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              {/* Mode filter */}
+              <Select value={modeFilter} onValueChange={(v) => setModeFilter(v as ModeFilter)}>
+                <SelectTrigger className="h-8 w-[120px] text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Modes</SelectItem>
+                  <SelectItem value="Production">Production</SelectItem>
+                  <SelectItem value="Training">Training</SelectItem>
+                </SelectContent>
+              </Select>
               {/* Time range */}
               <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
                 <SelectTrigger className="h-8 w-[110px] text-[11px]">
@@ -222,24 +236,24 @@ export default function PerformancePage() {
           {/* ═══ Dashboard ═══ */}
           {subTab === "dashboard" && (
             <>
-              {/* KPI Cards — 5 */}
-              <div className="grid grid-cols-5 gap-3 mb-6">
+              {/* KPI Cards — 6 */}
+              <div className="grid grid-cols-6 gap-3 mb-6">
                 {performanceSummary.map((metric) => {
                   const positive = isPositiveTrend(metric.label, metric.trend);
                   return (
                     <Card key={metric.label} className="overflow-hidden">
-                      <CardContent className="pt-4 pb-3">
-                        <span className="text-[11px] text-muted-foreground font-medium">{metric.label}</span>
-                        <div className="mt-2">
-                          <span className="text-xl font-semibold text-foreground tabular-nums">
+                      <CardContent className="pt-3 pb-2.5 px-3">
+                        <span className="text-[10px] text-muted-foreground font-medium leading-tight">{metric.label}</span>
+                        <div className="mt-1.5">
+                          <span className="text-[22px] font-bold text-foreground tabular-nums leading-none">
                             {formatKPIValue(metric.label, metric.value, metric.unit)}
                           </span>
                         </div>
-                        <div className={cn("flex items-center gap-0.5 mt-1 text-[11px] font-medium", positive ? "text-emerald-600" : "text-red-500")}>
+                        <div className={cn("flex items-center gap-0.5 mt-1.5 text-[10px] font-medium", positive ? "text-emerald-600" : "text-red-500")}>
                           {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                           <span>{formatTrend(metric.label, metric.trend, metric.unit)}</span>
-                          <span className="text-muted-foreground font-normal ml-0.5">{metric.trendLabel}</span>
                         </div>
+                        <div className="text-[9px] text-muted-foreground mt-0.5">{metric.trendLabel}</div>
                       </CardContent>
                     </Card>
                   );
