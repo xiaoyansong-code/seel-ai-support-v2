@@ -597,24 +597,46 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
               <div className="flex-1 min-w-0">
                 <h4 className="text-[13px] font-medium text-foreground truncate">{doc.name}</h4>
                 <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
-                  <span className={cn(
-                    doc.status === "Processed" ? "text-green-600" :
-                    doc.status === "Processing" ? "text-amber-600" :
-                    "text-red-500"
-                  )}>
-                    {doc.status === "Processing" ? "Processing..." : doc.status}
-                  </span>
-                  <span>·</span>
+                  {/* Only show non-default statuses */}
+                  {doc.status === "Processing" && (
+                    <><span className="text-amber-600">Processing...</span><span>·</span></>
+                  )}
+                  {doc.status === "Error" && (
+                    <><span className="text-red-500">Error</span><span>·</span></>
+                  )}
                   <span>{doc.size}</span>
                   <span>·</span>
                   <span>{doc.uploadedAt}</span>
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <span className="text-[11px] text-muted-foreground">{doc.status === "Processed" ? "In use" : "Disabled"}</span>
-                  <Switch checked={doc.status === "Processed"} className="scale-[0.8]" />
-                </label>
+                {/* Error state: show Retry button */}
+                {doc.status === "Error" && (
+                  <button
+                    className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium"
+                    onClick={() => {
+                      updateDocument(doc.id, { status: "Processing" });
+                      toast.info("Retrying document processing...");
+                      setTimeout(() => {
+                        updateDocument(doc.id, { status: "Processed", inUse: true });
+                        toast.success("Document processed successfully.");
+                      }, 3000);
+                    }}
+                  >
+                    Retry
+                  </button>
+                )}
+                {/* Switch only for Processed docs */}
+                {doc.status === "Processed" && (
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <span className="text-[11px] text-muted-foreground">{doc.inUse ? "In use" : "Disabled"}</span>
+                    <Switch
+                      checked={doc.inUse}
+                      onCheckedChange={() => toggleDocInUse(doc.id)}
+                      className="scale-[0.8]"
+                    />
+                  </label>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground/60 hover:text-foreground shrink-0">
