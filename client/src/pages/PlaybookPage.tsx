@@ -311,12 +311,51 @@ function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { rule
 
   if (!rule) return null;
 
-  const sourceIcon = (source: string) => {
-    if (source.toLowerCase().includes("document")) return "📄";
-    if (source.toLowerCase().includes("team lead") || source.toLowerCase().includes("lead")) return "💬";
-    if (source.toLowerCase().includes("manager")) return "✏️";
-    return "📋";
+  // Extract actions from rule content (verbs that represent system actions)
+  const extractActions = (content: string): string[] => {
+    const actionPatterns = [
+      /look up (?:the )?(?:order|customer|tracking)/gi,
+      /retrieve (?:tracking|order|customer)/gi,
+      /process (?:the )?(?:refund|replacement|cancellation|return)/gi,
+      /cancel (?:the )?order/gi,
+      /issue (?:a )?(?:full )?refund/gi,
+      /update (?:the )?(?:shipping )?address/gi,
+      /escalate (?:to|immediately)/gi,
+      /file (?:an )?(?:insurance )?claim/gi,
+      /verify (?:the )?(?:order|Seel|protection)/gi,
+      /offer (?:compensation|return|alternative)/gi,
+      /track (?:shipment|order)/gi,
+    ];
+    const found: string[] = [];
+    for (const pattern of actionPatterns) {
+      const matches = content.match(pattern);
+      if (matches) {
+        matches.forEach(m => {
+          const clean = m.replace(/^(the |a |an )/, "").trim();
+          const capitalized = clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase();
+          if (!found.includes(capitalized)) found.push(capitalized);
+        });
+      }
+    }
+    return found.slice(0, 4);
   };
+
+  const actions = extractActions(rule.content);
+
+  const sourceLabel = (source: string) => {
+    if (source === "Document") {
+      const doc = rule.sourceDocId ? docsData.find(d => d.id === rule.sourceDocId) : null;
+      return doc ? doc.name : "Uploaded document";
+    }
+    if (source === "Team Lead") return "Team Lead proposal";
+    if (source === "Manager edit") return "Manager edit";
+    return source;
+  };
+
+  // Unified section header style
+  const SectionHeader = ({ children }: { children: React.ReactNode }) => (
+    <p className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.08em] mb-2.5">{children}</p>
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -328,40 +367,61 @@ function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { rule
           <SheetTitle className="text-[16px] mt-1">{rule.name}</SheetTitle>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 py-5">
-          {/* Rule content — read-only prose */}
-          <p className="text-[13px] text-foreground leading-[1.8] whitespace-pre-wrap">
-            {rule.content}
-          </p>
+        <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
+          {/* CONTENT */}
+          <div>
+            <SectionHeader>Content</SectionHeader>
+            <p className="text-[13px] text-foreground leading-[1.8] whitespace-pre-wrap">
+              {rule.content}
+            </p>
+          </div>
 
-          {/* Actions (from stats) */}
-          {rule.stats && (
-            <div className="mt-5">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Actions</p>
+          {/* ACTIONS */}
+          {actions.length > 0 && (
+            <div className="border-t border-border/60 pt-5">
+              <SectionHeader>Actions</SectionHeader>
               <div className="flex flex-wrap gap-2">
-                {rule.description.match(/\b(track|look up|check|process|cancel|refund|replace|escalate)\b/gi)?.slice(0, 3).map((action, i) => (
-                  <Badge key={i} variant="outline" className="text-[11px] h-6 border-[#6c47ff]/30 text-[#6c47ff] bg-[#f8f6ff]">
-                    <Sparkles size={10} className="mr-1" /> {action.charAt(0).toUpperCase() + action.slice(1)}
+                {actions.map((action, i) => (
+                  <Badge key={i} variant="outline" className="text-[11px] h-6 font-normal border-border/80 text-foreground/80 bg-muted/30">
+                    <Sparkles size={10} className="mr-1 text-muted-foreground/50" /> {action}
                   </Badge>
                 ))}
               </div>
             </div>
           )}
 
-          {/* Config History — collapsible */}
-          <div className="mt-6 border-t border-border pt-4">
+          {/* STATS */}
+          <div className="border-t border-border/60 pt-5">
+            <SectionHeader>Stats</SectionHeader>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-muted/30 rounded-lg px-3 py-2.5">
+                <p className="text-[18px] font-semibold text-foreground">{rule.stats.used}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Times used</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg px-3 py-2.5">
+                <p className="text-[18px] font-semibold text-foreground">{rule.stats.avgCsat}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Avg CSAT</p>
+              </div>
+              <div className="bg-muted/30 rounded-lg px-3 py-2.5">
+                <p className="text-[18px] font-semibold text-foreground">{rule.stats.deflection}%</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">Deflection</p>
+              </div>
+            </div>
+          </div>
+
+          {/* CONFIG HISTORY — collapsible */}
+          <div className="border-t border-border/60 pt-5">
             <button
               onClick={() => setHistoryOpen(!historyOpen)}
-              className="flex items-center gap-2 w-full text-left group"
+              className="flex items-center gap-1.5 w-full text-left"
             >
-              <History size={14} className="text-muted-foreground" />
-              <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-[0.08em]">
                 Config History ({rule.versionHistory.length})
               </span>
               <ChevronDown
-                size={14}
+                size={12}
                 className={cn(
-                  "text-muted-foreground ml-auto transition-transform",
+                  "text-muted-foreground/50 ml-auto transition-transform",
                   historyOpen && "rotate-180"
                 )}
               />
@@ -370,14 +430,14 @@ function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { rule
             {historyOpen && (
               <div className="mt-3 relative">
                 {/* Timeline line */}
-                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+                <div className="absolute left-[5px] top-2 bottom-2 w-px bg-border/60" />
 
                 <div className="space-y-4">
                   {rule.versionHistory.map((entry, i) => (
                     <div key={i} className="flex gap-3 relative">
                       {/* Timeline dot */}
                       <div className={cn(
-                        "w-[15px] h-[15px] rounded-full border-2 shrink-0 mt-0.5 z-10",
+                        "w-[11px] h-[11px] rounded-full border-2 shrink-0 mt-0.5 z-10",
                         i === 0
                           ? "bg-[#6c47ff] border-[#6c47ff]"
                           : "bg-white border-border"
@@ -393,42 +453,25 @@ function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { rule
                           </span>
                           <span className="text-[11px] text-muted-foreground">{entry.timestamp}</span>
                         </div>
-                        <p className="text-[12px] text-muted-foreground mt-0.5">{entry.diff}</p>
+                        <p className="text-[12px] text-foreground/80 mt-1 leading-relaxed">{entry.diff}</p>
                         <button
                           onClick={() => {
                             if (entry.source === "Document" && rule.sourceDocId) onNavigateToDoc?.(rule.sourceDocId);
                           }}
                           className={cn(
-                            "text-[11px] mt-1 flex items-center gap-1",
+                            "text-[11px] mt-1.5",
                             entry.source === "Document" && rule.sourceDocId
-                              ? "text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer"
+                              ? "text-[#6c47ff] hover:text-[#5a3ad9] hover:underline cursor-pointer"
                               : "text-muted-foreground cursor-default"
                           )}
                         >
-                          {sourceIcon(entry.source)} {entry.source === "Document" && rule.sourceDocId
-                            ? docsData.find(d => d.id === rule.sourceDocId)?.name || "Uploaded document"
-                            : entry.source === "Team Lead" ? "Team Lead conversation" : entry.source === "Manager edit" ? "Manager edit" : entry.source}
+                          {sourceLabel(entry.source)}
                         </button>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
-
-          {/* Footer metadata */}
-          <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-4 mt-4 border-t border-border">
-            <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
-            {rule.source === "Document" && rule.sourceDocId ? (
-              <button
-                onClick={() => onNavigateToDoc?.(rule.sourceDocId!)}
-                className="text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer flex items-center gap-1"
-              >
-                <FileText size={10} /> {docsData.find(d => d.id === rule.sourceDocId)?.name || "Uploaded document"}
-              </button>
-            ) : (
-              <span>Source: {rule.source === "Team Lead" ? "Team Lead conversation" : rule.source === "Manager edit" ? "Manager edit" : rule.source}</span>
             )}
           </div>
         </div>
