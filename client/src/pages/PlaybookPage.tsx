@@ -20,7 +20,12 @@ import {
   BookOpen, FileText, Upload, Search, Clock,
   ChevronRight, ChevronDown, X, Trash2, History,
   Plus, ThumbsUp, ThumbsDown, Sparkles, PenLine,
+  MoreHorizontal,
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 
@@ -560,22 +565,18 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
   /* ── Normal documents list ── */
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Header */}
-      <div className="px-5 py-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-[14px] font-semibold text-foreground">{docsData.length} Documents</h3>
-          <p className="text-[11px] text-muted-foreground">{docsData.filter((d) => d.status === "Processed").length} processed</p>
+      {/* Header — search left-aligned, add button right */}
+      <div className="px-5 py-3 flex items-center gap-3">
+        <div className="relative flex-1 max-w-[260px]">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+          <Input
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 pl-8 text-[12px]"
+          />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search documents..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 w-[200px] pl-8 text-[12px]"
-            />
-          </div>
+        <div className="ml-auto">
           <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={() => setShowAddDialog(true)}>
             <Plus size={12} className="mr-1" /> Add Document
           </Button>
@@ -583,48 +584,53 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5">
-        {/* Document list */}
-        <div className="space-y-2">
+        {/* Compact document list — single card with dividers */}
+        <div className="border border-border rounded-xl bg-white overflow-hidden divide-y divide-border/60">
           {filteredDocs.map((doc) => (
-            <div key={doc.id} className="border border-border rounded-xl p-4 bg-white flex items-center gap-4">
+            <div key={doc.id} className="px-4 py-3 flex items-center gap-3">
               <div className={cn(
-                "w-10 h-10 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0",
-                doc.type === "PDF" ? "bg-red-500" : doc.type === "DOCX" || doc.type === "DOC" ? "bg-blue-500" : doc.type === "PPTX" ? "bg-orange-500" : "bg-gray-500"
+                "w-8 h-8 rounded-md flex items-center justify-center text-white text-[9px] font-bold shrink-0 opacity-75",
+                doc.type === "PDF" ? "bg-red-400" : doc.type === "DOCX" || doc.type === "DOC" ? "bg-blue-400" : doc.type === "PPTX" ? "bg-orange-400" : "bg-gray-400"
               )}>
                 {doc.type}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h4 className="text-[13px] font-medium text-foreground truncate">{doc.name}</h4>
-                  <Badge variant="outline" className={cn(
-                    "text-[10px] h-5 shrink-0",
-                    doc.status === "Processed" ? "border-green-500 text-green-600" :
-                    doc.status === "Processing" ? "border-amber-500 text-amber-600" :
-                    "border-red-500 text-red-600"
+                <h4 className="text-[13px] font-medium text-foreground truncate">{doc.name}</h4>
+                <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
+                  <span className={cn(
+                    doc.status === "Processed" ? "text-green-600" :
+                    doc.status === "Processing" ? "text-amber-600" :
+                    "text-red-500"
                   )}>
-                    {doc.status}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-3 mt-1 text-[11px] text-muted-foreground">
+                    {doc.status === "Processing" ? "Processing..." : doc.status}
+                  </span>
+                  <span>·</span>
                   <span>{doc.size}</span>
                   <span>·</span>
-                  <span>Uploaded {doc.uploadedAt}</span>
-                  {doc.extractedRules && (
-                    <>
-                      <span>·</span>
-                      <span className="text-[#6c47ff]">{doc.extractedRules}</span>
-                    </>
-                  )}
+                  <span>{doc.uploadedAt}</span>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0"
-                onClick={() => { removeDocument(doc.id); toast.success("Document removed"); }}
-              >
-                <Trash2 size={14} />
-              </Button>
+              <div className="flex items-center gap-3 shrink-0">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <span className="text-[11px] text-muted-foreground">{doc.status === "Processed" ? "In use" : "Disabled"}</span>
+                  <Switch checked={doc.status === "Processed"} className="scale-[0.8]" />
+                </label>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground/60 hover:text-foreground shrink-0">
+                      <MoreHorizontal size={14} />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-32">
+                    <DropdownMenuItem
+                      className="text-red-600 focus:text-red-600 text-[12px]"
+                      onClick={() => { removeDocument(doc.id); toast.success("Document removed"); }}
+                    >
+                      <Trash2 size={12} className="mr-1.5" /> Remove
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
           ))}
         </div>
