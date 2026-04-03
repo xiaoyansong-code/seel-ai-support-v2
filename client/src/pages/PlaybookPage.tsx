@@ -1,24 +1,28 @@
 /*
  * PlaybookPage — Rules + Documents
- * Round 7: Documents tab has empty state with guided upload + "Try sample document".
- *          First successful import triggers a Team Lead topic message.
- *          Consumes playbookDeepLink to auto-switch to Documents tab.
+ * Round 15: 6 changes — read-only rule detail, setup proposal cards,
+ *           simplified rule cards, single-view detail sheet with config history,
+ *           new document dialog (Upload File / Manual Input).
  */
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useApp } from "@/contexts/AppContext";
 import type { Rule, Document as DocType, Topic } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  BookOpen, FileText, Upload, Search, BarChart3, Clock, Smile,
-  ChevronRight, Save, X, Trash2, Eye, History, Lightbulb, Check, Plus,
-  Sparkles, ArrowRight,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  BookOpen, FileText, Upload, Search, Clock,
+  ChevronRight, ChevronDown, X, Trash2, History,
+  Plus, ThumbsUp, ThumbsDown, Sparkles, PenLine,
 } from "lucide-react";
 import { toast } from "sonner";
+import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 
 type PlaybookTab = "rules" | "documents";
 
@@ -26,7 +30,6 @@ export default function PlaybookPage() {
   const { playbookDeepLink, setPlaybookDeepLink } = useApp();
   const [activeTab, setActiveTab] = useState<PlaybookTab>("rules");
 
-  /* Consume deep-link from Setup Progress */
   useEffect(() => {
     if (playbookDeepLink === "documents") {
       setActiveTab("documents");
@@ -36,7 +39,6 @@ export default function PlaybookPage() {
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
-      {/* Sub-tabs */}
       <div className="px-5 py-0 border-b border-border bg-white flex items-center gap-1">
         {(["rules", "documents"] as PlaybookTab[]).map((tab) => (
           <button
@@ -67,17 +69,20 @@ export default function PlaybookPage() {
 // RULES VIEW
 // ============================================================
 function RulesView() {
-  const { rulesData, toggleRule, topicsData, updateTopic } = useApp();
+  const { rulesData, topicsData, updateTopic, setupFullyComplete } = useApp();
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sidebarTicketId, setSidebarTicketId] = useState<string | null>(null);
 
   const filteredRules = rulesData.filter((r) =>
     r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    r.description.toLowerCase().includes(searchQuery.toLowerCase())
+    r.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const enabledCount = rulesData.filter((r) => r.enabled).length;
-  const pendingTopics = topicsData.filter((t) => t.status === "pending");
+  // Setup-stage proposals: only show when setup is NOT complete
+  const pendingTopics = !setupFullyComplete
+    ? topicsData.filter((t) => t.status === "pending")
+    : [];
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
@@ -85,112 +90,55 @@ function RulesView() {
       <div className="px-5 py-3 flex items-center justify-between">
         <div>
           <h3 className="text-[14px] font-semibold text-foreground">{rulesData.length} Rules</h3>
-          <p className="text-[11px] text-muted-foreground">{enabledCount} active · {rulesData.length - enabledCount} paused</p>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Search rules..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="h-8 w-[200px] pl-8 text-[12px]"
-            />
-          </div>
-
+        <div className="relative">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search rules..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 w-[200px] pl-8 text-[12px]"
+          />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
-        {/* Team Lead Proposals */}
+        {/* Setup-stage Proposal Cards (same style as AgentsPage ProposalCard) */}
         {pendingTopics.length > 0 && (
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Lightbulb size={14} className="text-amber-500" />
-              <h3 className="text-[13px] font-semibold">Team Lead Proposals ({pendingTopics.length})</h3>
-            </div>
+          <div className="space-y-3">
             {pendingTopics.map((topic) => (
-              <div key={topic.id} className="border border-amber-200 bg-amber-50/50 rounded-xl p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline" className="text-[10px] font-semibold border-amber-400 text-amber-700 bg-amber-100">
-                        {topic.badge}
-                      </Badge>
-                      {topic.confidence && (
-                        <span className="text-[10px] text-muted-foreground">Confidence: {topic.confidence}</span>
-                      )}
-                    </div>
-                    <h4 className="text-[13px] font-semibold">{topic.title}</h4>
-                    <p className="text-[12px] text-muted-foreground mt-1 line-clamp-2">{topic.summary}</p>
-                    {topic.ruleContent && (
-                      <div className="bg-white border border-amber-200 rounded-lg p-2 mt-2">
-                        <pre className="text-[11px] text-foreground whitespace-pre-wrap font-mono leading-relaxed line-clamp-3">{topic.ruleContent}</pre>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 mt-2 text-[10px] text-muted-foreground">
-                      {topic.sourceTickets.slice(0, 3).map((t) => (
-                        <Badge key={t} variant="secondary" className="text-[10px] h-5">{t}</Badge>
-                      ))}
-                      {topic.sourceTickets.length > 3 && <span>+{topic.sourceTickets.length - 3} more</span>}
-                    </div>
-                  </div>
-                  <div className="flex gap-1.5 shrink-0">
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-green-600 hover:bg-green-50"
-                      onClick={() => { updateTopic(topic.id, { status: "accepted" }); toast.success("Proposal accepted"); }}>
-                      <Check size={14} />
-                    </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-500 hover:bg-red-50"
-                      onClick={() => { updateTopic(topic.id, { status: "rejected" }); toast.success("Proposal rejected"); }}>
-                      <X size={14} />
-                    </Button>
-                  </div>
-                </div>
-              </div>
+              <PlaybookProposalCard
+                key={topic.id}
+                topic={topic}
+                onAccept={() => { updateTopic(topic.id, { status: "accepted" }); toast.success("Proposal accepted"); }}
+                onReject={() => { updateTopic(topic.id, { status: "rejected" }); toast.success("Proposal rejected"); }}
+                onTicketClick={(id) => setSidebarTicketId(id)}
+              />
             ))}
           </div>
         )}
 
-        {/* Rule cards */}
-        <div className="space-y-2">
-          {filteredRules.map((rule) => (
+        {/* Simplified Rule cards */}
+        <div className="space-y-1">
+          {filteredRules.map((rule, index) => (
             <div
               key={rule.id}
               className={cn(
-                "border rounded-xl p-4 transition-all cursor-pointer",
-                selectedRuleId === rule.id ? "border-[#6c47ff]/40 bg-[#f8f6ff]" : "border-border bg-white hover:border-[#6c47ff]/20"
+                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all cursor-pointer group",
+                selectedRuleId === rule.id
+                  ? "bg-[#f8f6ff] border border-[#6c47ff]/30"
+                  : "hover:bg-[#f8f8f8] border border-transparent"
               )}
               onClick={() => setSelectedRuleId(rule.id)}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="text-[13px] font-semibold text-foreground">{rule.name}</h4>
-                    <Badge variant="outline" className={cn(
-                      "text-[10px] h-5",
-                      rule.enabled ? "border-green-500 text-green-600" : "border-gray-400 text-gray-500"
-                    )}>
-                      {rule.enabled ? "Active" : "Paused"}
-                    </Badge>
-                    <Badge variant="secondary" className="text-[10px] h-5">{rule.source}</Badge>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground leading-relaxed line-clamp-2">{rule.description}</p>
-                  <div className="flex items-center gap-4 mt-2 text-[11px] text-muted-foreground">
-                    <span className="flex items-center gap-1"><BarChart3 size={10} /> {rule.stats.used} uses</span>
-                    <span className="flex items-center gap-1"><Smile size={10} /> {rule.stats.avgCsat} CSAT</span>
-                    <span className="flex items-center gap-1"><Eye size={10} /> {rule.stats.deflection}% deflection</span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 ml-3">
-                  <Switch
-                    checked={rule.enabled}
-                    onCheckedChange={() => toggleRule(rule.id)}
-                    onClick={(e) => e.stopPropagation()}
-                    className="scale-90"
-                  />
-                  <ChevronRight size={14} className="text-muted-foreground" />
-                </div>
+              <span className="text-[12px] text-muted-foreground w-5 text-right shrink-0">{index + 1}.</span>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-[13px] font-medium text-foreground">{rule.name}</h4>
+                <p className="text-[12px] text-muted-foreground line-clamp-1 mt-0.5">
+                  {rule.content.slice(0, 120)}{rule.content.length > 120 ? "…" : ""}
+                </p>
               </div>
+              <ChevronRight size={14} className="text-muted-foreground shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           ))}
         </div>
@@ -204,167 +152,248 @@ function RulesView() {
           onOpenChange={(open) => !open && setSelectedRuleId(null)}
         />
       )}
+
+      {/* Conversation Log Sidebar for source tickets */}
+      {sidebarTicketId && (
+        <ConversationLogSidebar ticketId={sidebarTicketId} onClose={() => setSidebarTicketId(null)} />
+      )}
     </div>
   );
 }
 
 // ============================================================
-// RULE DETAIL SHEET (Editable)
+// PLAYBOOK PROPOSAL CARD (mirrors AgentsPage ProposalCard style)
+// ============================================================
+function PlaybookProposalCard({ topic, onAccept, onReject, onTicketClick }: {
+  topic: Topic;
+  onAccept: () => void;
+  onReject: () => void;
+  onTicketClick: (ticketId: string) => void;
+}) {
+  const [ruleExpanded, setRuleExpanded] = useState(false);
+  const [newRuleExpanded, setNewRuleExpanded] = useState(false);
+  const isUpdate = !!topic.currentRuleContent;
+
+  return (
+    <div className="bg-white border border-border rounded-xl overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center gap-2">
+        <Badge variant="outline" className="text-[9px] font-bold uppercase tracking-wider shrink-0 py-0 h-5 border-[#6c47ff] text-[#6c47ff] bg-[#f0edff]">
+          {topic.badge}
+        </Badge>
+        <span className="text-[13px] font-medium text-foreground flex-1">{topic.title}</span>
+        {topic.status === "pending" && (
+          <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+        )}
+      </div>
+
+      {/* Body */}
+      <div className="px-4 pb-4 pt-0 border-t border-border/50">
+        <p className="text-[12px] text-muted-foreground leading-relaxed mt-3 mb-3">{topic.summary}</p>
+
+        {/* What changed */}
+        {topic.ruleContent && isUpdate && (
+          <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 mb-3 relative overflow-hidden">
+            <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-400 rounded-l-lg" />
+            <p className="text-[10px] font-semibold text-amber-700 mb-1.5 uppercase tracking-wider pl-2">What Changed</p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap pl-2",
+              !ruleExpanded && "line-clamp-3"
+            )}>
+              {topic.ruleContent}
+            </p>
+            {topic.ruleContent.split("\n").length > 3 && !ruleExpanded && (
+              <button onClick={() => setRuleExpanded(true)} className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1 pl-2">
+                Show full rule
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* New Rule (for new rules, not updates) */}
+        {topic.ruleContent && !isUpdate && (
+          <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">New Rule</p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
+              !ruleExpanded && "line-clamp-3"
+            )}>
+              {topic.ruleContent}
+            </p>
+            {topic.ruleContent.split("\n").length > 3 && !ruleExpanded && (
+              <button onClick={() => setRuleExpanded(true)} className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1">
+                Show full rule
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* New Rule (result after update) */}
+        {topic.newRuleContent && (
+          <div className="bg-[#f8f9fa] border border-[#e5e7eb] rounded-lg p-3 mb-3">
+            <p className="text-[10px] font-semibold text-muted-foreground mb-1.5 uppercase tracking-wider">New Rule</p>
+            <p className={cn(
+              "text-[12px] text-foreground leading-relaxed whitespace-pre-wrap",
+              !newRuleExpanded && "line-clamp-3"
+            )}>
+              {topic.newRuleContent}
+            </p>
+            {topic.newRuleContent.split("\n").length > 3 && !newRuleExpanded && (
+              <button onClick={() => setNewRuleExpanded(true)} className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] font-medium mt-1">
+                Show full rule
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Source tickets */}
+        {topic.sourceTickets.length > 0 && (
+          <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3 flex-wrap">
+            <span>Source: {topic.sourceTickets.length} tickets</span>
+            <span>&middot;</span>
+            {topic.sourceTickets.map((t) => (
+              <button
+                key={t}
+                onClick={() => onTicketClick(t)}
+                className="text-[10px] text-[#6c47ff] hover:text-[#5a3ad9] underline underline-offset-2 font-medium"
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Action buttons */}
+        {topic.status === "pending" && (
+          <div className="flex gap-2">
+            <Button size="sm" className="h-7 text-[11px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={onAccept}>
+              <ThumbsUp size={11} className="mr-1" /> Accept
+            </Button>
+            <Button size="sm" variant="ghost" className="h-7 text-[11px] text-muted-foreground" onClick={onReject}>
+              <ThumbsDown size={11} className="mr-1" /> Reject
+            </Button>
+          </div>
+        )}
+        {topic.status === "accepted" && (
+          <Badge className="bg-green-50 text-green-700 border-green-200 text-[10px]">Accepted</Badge>
+        )}
+        {topic.status === "rejected" && (
+          <Badge className="bg-red-50 text-red-600 border-red-200 text-[10px]">Rejected</Badge>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// RULE DETAIL SHEET — Read-only, single view, config history
 // ============================================================
 function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { rulesData, updateRule } = useApp();
+  const { rulesData } = useApp();
   const rule = rulesData.find((r) => r.id === ruleId);
-  const [editing, setEditing] = useState(false);
-  const [editContent, setEditContent] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [detailTab, setDetailTab] = useState<"content" | "stats" | "history">("content");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   if (!rule) return null;
 
-  const startEdit = () => {
-    setEditContent(rule.content);
-    setEditDescription(rule.description);
-    setEditing(true);
-  };
-
-  const saveEdit = () => {
-    updateRule(rule.id, {
-      content: editContent,
-      description: editDescription,
-      lastUpdated: "Just now",
-      source: "Manager edit",
-    });
-    setEditing(false);
-    toast.success("Rule updated", { description: `"${rule.name}" has been saved.` });
+  const sourceIcon = (source: string) => {
+    if (source.toLowerCase().includes("document")) return "📄";
+    if (source.toLowerCase().includes("team lead") || source.toLowerCase().includes("lead")) return "💬";
+    if (source.toLowerCase().includes("manager")) return "✏️";
+    return "📋";
   };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] sm:max-w-[480px] p-0 flex flex-col">
-        <SheetHeader className="px-5 pt-5 pb-3 border-b border-border">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-[15px]">{rule.name}</SheetTitle>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className={cn(
-                "text-[10px]",
-                rule.enabled ? "border-green-500 text-green-600" : "border-gray-400 text-gray-500"
-              )}>
-                {rule.enabled ? "Active" : "Paused"}
-              </Badge>
-            </div>
+        <SheetHeader className="px-5 pt-4 pb-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground">Updated {rule.lastUpdated}</span>
           </div>
-          <div className="flex gap-1 mt-2">
-            {(["content", "stats", "history"] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setDetailTab(tab)}
-                className={cn(
-                  "px-3 py-1.5 text-[12px] font-medium rounded-lg capitalize transition-colors",
-                  detailTab === tab ? "bg-[#f0edff] text-[#6c47ff]" : "text-muted-foreground hover:bg-[#f5f5f5]"
-                )}
-              >
-                {tab === "content" && <BookOpen size={12} className="inline mr-1" />}
-                {tab === "stats" && <BarChart3 size={12} className="inline mr-1" />}
-                {tab === "history" && <History size={12} className="inline mr-1" />}
-                {tab}
-              </button>
-            ))}
-          </div>
+          <SheetTitle className="text-[16px] mt-1">{rule.name}</SheetTitle>
         </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {detailTab === "content" && (
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
-                  {!editing && (
-                    <Button size="sm" variant="ghost" className="h-6 text-[11px]" onClick={startEdit}>
-                      Edit
-                    </Button>
-                  )}
-                </div>
-                {editing ? (
-                  <textarea
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full text-[12px] p-2 border border-border rounded-lg resize-none h-20 focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
-                  />
-                ) : (
-                  <p className="text-[12px] text-muted-foreground leading-relaxed">{rule.description}</p>
-                )}
-              </div>
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          {/* Rule content — read-only prose */}
+          <p className="text-[13px] text-foreground leading-[1.8] whitespace-pre-wrap">
+            {rule.content}
+          </p>
 
-              <div>
-                <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Rule Logic</p>
-                {editing ? (
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    className="w-full text-[12px] p-3 border border-border rounded-lg font-mono resize-none h-40 focus:outline-none focus:ring-2 focus:ring-[#6c47ff]/30"
-                  />
-                ) : (
-                  <pre className="text-[12px] text-foreground whitespace-pre-wrap font-mono leading-relaxed bg-[#f8f9fa] p-3 rounded-lg border border-border">{rule.content}</pre>
-                )}
-              </div>
-
-              {editing && (
-                <div className="flex gap-2">
-                  <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={saveEdit}>
-                    <Save size={12} className="mr-1" /> Save Changes
-                  </Button>
-                  <Button size="sm" variant="outline" className="h-8 text-[12px]" onClick={() => setEditing(false)}>
-                    Cancel
-                  </Button>
-                </div>
-              )}
-
-              <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-2 border-t border-border">
-                <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
-                <span>Source: {rule.source}</span>
+          {/* Actions (from stats) */}
+          {rule.stats && (
+            <div className="mt-5">
+              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Actions</p>
+              <div className="flex flex-wrap gap-2">
+                {rule.description.match(/\b(track|look up|check|process|cancel|refund|replace|escalate)\b/gi)?.slice(0, 3).map((action, i) => (
+                  <Badge key={i} variant="outline" className="text-[11px] h-6 border-[#6c47ff]/30 text-[#6c47ff] bg-[#f8f6ff]">
+                    <Sparkles size={10} className="mr-1" /> {action.charAt(0).toUpperCase() + action.slice(1)}
+                  </Badge>
+                ))}
               </div>
             </div>
           )}
 
-          {detailTab === "stats" && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
-                  <p className="text-[20px] font-bold text-foreground">{rule.stats.used}</p>
-                  <p className="text-[10px] text-muted-foreground">Times Used</p>
-                </div>
-                <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
-                  <p className="text-[20px] font-bold text-foreground">{rule.stats.avgCsat}</p>
-                  <p className="text-[10px] text-muted-foreground">Avg CSAT</p>
-                </div>
-                <div className="bg-[#f8f9fa] rounded-lg p-3 text-center">
-                  <p className="text-[20px] font-bold text-foreground">{rule.stats.deflection}%</p>
-                  <p className="text-[10px] text-muted-foreground">Deflection</p>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Config History — collapsible */}
+          <div className="mt-6 border-t border-border pt-4">
+            <button
+              onClick={() => setHistoryOpen(!historyOpen)}
+              className="flex items-center gap-2 w-full text-left group"
+            >
+              <History size={14} className="text-muted-foreground" />
+              <span className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">
+                Config History ({rule.versionHistory.length})
+              </span>
+              <ChevronDown
+                size={14}
+                className={cn(
+                  "text-muted-foreground ml-auto transition-transform",
+                  historyOpen && "rotate-180"
+                )}
+              />
+            </button>
 
-          {detailTab === "history" && (
-            <div className="space-y-3">
-              {rule.versionHistory.length > 0 ? (
-                rule.versionHistory.map((entry: { version: number; timestamp: string; source: string; diff: string }, i: number) => (
-                  <div key={i} className="border border-border rounded-lg p-3">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[11px] font-medium text-foreground">v{entry.version}</span>
-                      <span className="text-[10px] text-muted-foreground">{entry.timestamp}</span>
+            {historyOpen && (
+              <div className="mt-3 relative">
+                {/* Timeline line */}
+                <div className="absolute left-[7px] top-2 bottom-2 w-px bg-border" />
+
+                <div className="space-y-4">
+                  {rule.versionHistory.map((entry, i) => (
+                    <div key={i} className="flex gap-3 relative">
+                      {/* Timeline dot */}
+                      <div className={cn(
+                        "w-[15px] h-[15px] rounded-full border-2 shrink-0 mt-0.5 z-10",
+                        i === 0
+                          ? "bg-[#6c47ff] border-[#6c47ff]"
+                          : "bg-white border-border"
+                      )} />
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className={cn(
+                            "text-[12px] font-semibold",
+                            i === 0 ? "text-[#6c47ff]" : "text-foreground"
+                          )}>
+                            v{entry.version}{i === 0 ? " (current)" : ""}
+                          </span>
+                          <span className="text-[11px] text-muted-foreground">{entry.timestamp}</span>
+                        </div>
+                        <p className="text-[12px] text-muted-foreground mt-0.5">{entry.diff}</p>
+                        <button className="text-[11px] text-[#6c47ff] hover:text-[#5a3ad9] mt-1 flex items-center gap-1">
+                          {sourceIcon(entry.source)} {entry.source === "Document" ? "Extracted from uploaded document" : entry.source === "Team Lead" ? "Created from Team Lead conversation" : entry.source === "Manager edit" ? "Edited by manager" : entry.source}
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-muted-foreground">Source: {entry.source}</p>
-                    {entry.diff && (
-                      <pre className="text-[10px] text-muted-foreground mt-2 bg-[#f8f9fa] p-2 rounded font-mono whitespace-pre-wrap">{entry.diff}</pre>
-                    )}
-                  </div>
-                ))
-              ) : (
-                <p className="text-[12px] text-muted-foreground text-center py-8">No history yet</p>
-              )}
-            </div>
-          )}
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer metadata */}
+          <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-4 mt-4 border-t border-border">
+            <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
+            <span>Source: {rule.source}</span>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
@@ -372,7 +401,7 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
 }
 
 // ============================================================
-// DOCUMENTS VIEW — with empty state + Try Sample Document
+// DOCUMENTS VIEW
 // ============================================================
 function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
   const {
@@ -382,6 +411,7 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
   const [dragOver, setDragOver] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   const filteredDocs = docsData.filter((d) =>
     d.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -412,9 +442,8 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
     };
     addDocument(newDoc);
     setProcessing(true);
-    toast.success("File uploaded", { description: `${name} is being processed.` });
+    toast.info("Processing will take 5\u201310 minutes \u2014 we will notify you when rules are ready.");
 
-    // Simulate processing
     setTimeout(() => {
       const ruleNames = [
         "Return Window Policy",
@@ -429,16 +458,12 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
       setSopUploaded(true);
       setExtractedRuleNames(ruleNames);
       setProcessing(false);
-
-      // Redirect to Rules tab after successful extraction
       onSwitchToRules();
 
-      // Create a Team Lead topic for the first import
       const newTopic: Topic = {
         id: `topic-doc-${Date.now()}`,
         type: "document-parse",
         badge: "Document Import",
-        confidence: "High",
         title: `${ruleNames.length} rules extracted from "${name}"`,
         summary: `Your document has been processed and ${ruleNames.length} support rules were identified. Review and accept them to add to your playbook.`,
         ruleContent: ruleNames.map((r, i) => `${i + 1}. ${r}`).join("\n"),
@@ -447,17 +472,55 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
       };
       addTopic(newTopic);
       toast.success(`${ruleNames.length} rules extracted`, {
-        description: "Check the Team Lead view for details.",
+        description: "Check the Rules tab for details.",
       });
+    }, 2500);
+  };
+
+  const handleManualInput = (title: string, content: string) => {
+    const newDoc: DocType = {
+      id: `doc-${Date.now()}`,
+      name: title,
+      type: "TXT",
+      size: `${(content.length / 1024).toFixed(1)} KB`,
+      uploadedAt: "Just now",
+      status: "Processing",
+      inUse: false,
+      extractedRules: "",
+    };
+    addDocument(newDoc);
+    setProcessing(true);
+    toast.info("Processing will take 5\u201310 minutes \u2014 we will notify you when rules are ready.");
+
+    setTimeout(() => {
+      const ruleNames = ["Custom Policy Rule"];
+      updateDocument(newDoc.id, {
+        status: "Processed",
+        inUse: true,
+        extractedRules: `${ruleNames.length} rule extracted`,
+      });
+      setSopUploaded(true);
+      setExtractedRuleNames(ruleNames);
+      setProcessing(false);
+      onSwitchToRules();
+
+      const newTopic: Topic = {
+        id: `topic-doc-${Date.now()}`,
+        type: "document-parse",
+        badge: "Document Import",
+        title: `${ruleNames.length} rule extracted from "${title}"`,
+        summary: `Your manual input has been processed and ${ruleNames.length} support rule was identified.`,
+        ruleContent: ruleNames.map((r, i) => `${i + 1}. ${r}`).join("\n"),
+        sourceTickets: [],
+        status: "pending",
+      };
+      addTopic(newTopic);
+      toast.success(`${ruleNames.length} rule extracted`);
     }, 2500);
   };
 
   const simulateUpload = () => {
     handleUploadFile(`Document_${Date.now().toString().slice(-4)}.pdf`, "1.2 MB");
-  };
-
-  const trySampleDocument = () => {
-    handleUploadFile("Seel_Support_SOP_Sample.pdf", "842 KB");
   };
 
   /* ── Empty state ── */
@@ -487,31 +550,8 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
           >
             <Upload size={28} className="mx-auto mb-3 text-gray-400" />
             <p className="text-sm text-gray-600 font-medium">Drag & drop files here, or click to upload</p>
-            <p className="text-xs text-gray-400 mt-1">Supports PDF, DOCX, TXT, CSV</p>
+            <p className="text-xs text-gray-400 mt-1">Supports PDF, PPTX, DOCX, TXT, CSV, XLS</p>
           </div>
-
-          {/* Try sample document */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="bg-[#fafafa] px-3 text-xs text-gray-400">or</span>
-            </div>
-          </div>
-
-          <button
-            onClick={trySampleDocument}
-            disabled={processing}
-            className="mt-4 inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 bg-indigo-50 text-indigo-700 text-sm font-medium hover:bg-indigo-100 transition-colors disabled:opacity-50"
-          >
-            <Sparkles className="w-4 h-4" />
-            Try with a sample document
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
-          <p className="text-xs text-gray-400 mt-2">
-            We'll use a sample SOP to show you how rule extraction works.
-          </p>
         </div>
       </div>
     );
@@ -536,35 +576,20 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
               className="h-8 w-[200px] pl-8 text-[12px]"
             />
           </div>
-          <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={simulateUpload}>
-            <Upload size={12} className="mr-1" /> Upload
+          <Button size="sm" className="h-8 text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={() => setShowAddDialog(true)}>
+            <Plus size={12} className="mr-1" /> Add Document
           </Button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5">
-        {/* Drop zone */}
-        <div
-          className={cn(
-            "border-2 border-dashed rounded-xl p-6 mb-4 text-center transition-colors",
-            dragOver ? "border-[#6c47ff] bg-[#f8f6ff]" : "border-border bg-[#fafafa]"
-          )}
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-        >
-          <Upload size={24} className="mx-auto mb-2 text-muted-foreground" />
-          <p className="text-[13px] text-muted-foreground">Drag & drop files here, or click Upload</p>
-          <p className="text-[11px] text-muted-foreground mt-1">Supports PDF, DOCX, TXT, CSV</p>
-        </div>
-
         {/* Document list */}
         <div className="space-y-2">
           {filteredDocs.map((doc) => (
             <div key={doc.id} className="border border-border rounded-xl p-4 bg-white flex items-center gap-4">
               <div className={cn(
                 "w-10 h-10 rounded-lg flex items-center justify-center text-white text-[10px] font-bold shrink-0",
-                doc.type === "PDF" ? "bg-red-500" : doc.type === "DOC" ? "bg-blue-500" : "bg-gray-500"
+                doc.type === "PDF" ? "bg-red-500" : doc.type === "DOCX" || doc.type === "DOC" ? "bg-blue-500" : doc.type === "PPTX" ? "bg-orange-500" : "bg-gray-500"
               )}>
                 {doc.type}
               </div>
@@ -592,27 +617,140 @@ function DocumentsView({ onSwitchToRules }: { onSwitchToRules: () => void }) {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {doc.status === "Processed" && (
-                  <Switch
-                    checked={doc.inUse}
-                    onCheckedChange={() => toggleDocInUse(doc.id)}
-                    className="scale-90"
-                  />
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500"
-                  onClick={() => { removeDocument(doc.id); toast.success("Document removed"); }}
-                >
-                  <Trash2 size={14} />
-                </Button>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-red-500 shrink-0"
+                onClick={() => { removeDocument(doc.id); toast.success("Document removed"); }}
+              >
+                <Trash2 size={14} />
+              </Button>
             </div>
           ))}
         </div>
       </div>
+
+      {/* Add Document Dialog */}
+      <AddDocumentDialog
+        open={showAddDialog}
+        onOpenChange={setShowAddDialog}
+        onUploadFile={(name, size) => { setShowAddDialog(false); handleUploadFile(name, size); }}
+        onManualInput={(title, content) => { setShowAddDialog(false); handleManualInput(title, content); }}
+      />
     </div>
+  );
+}
+
+// ============================================================
+// ADD DOCUMENT DIALOG — Upload File / Manual Input
+// ============================================================
+function AddDocumentDialog({ open, onOpenChange, onUploadFile, onManualInput }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUploadFile: (name: string, size: string) => void;
+  onManualInput: (title: string, content: string) => void;
+}) {
+  const [tab, setTab] = useState<"upload" | "manual">("upload");
+  const [dragOver, setDragOver] = useState(false);
+  const [manualTitle, setManualTitle] = useState("");
+  const [manualContent, setManualContent] = useState("");
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      onUploadFile(file.name, `${(file.size / 1024).toFixed(0)} KB`);
+    }
+  };
+
+  const handleManualSubmit = () => {
+    if (!manualTitle.trim() || !manualContent.trim()) {
+      toast.error("Please fill in both title and content.");
+      return;
+    }
+    onManualInput(manualTitle.trim(), manualContent.trim());
+    setManualTitle("");
+    setManualContent("");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[520px]">
+        <DialogHeader>
+          <DialogTitle className="text-[15px]">Add Document</DialogTitle>
+        </DialogHeader>
+
+        {/* Tab switcher */}
+        <div className="flex gap-1 bg-[#f5f5f5] rounded-lg p-1">
+          <button
+            onClick={() => setTab("upload")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-[12px] font-medium transition-colors",
+              tab === "upload" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <Upload size={13} /> Upload File
+          </button>
+          <button
+            onClick={() => setTab("manual")}
+            className={cn(
+              "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-md text-[12px] font-medium transition-colors",
+              tab === "manual" ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <PenLine size={13} /> Manual Input
+          </button>
+        </div>
+
+        {tab === "upload" ? (
+          <div
+            className={cn(
+              "border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer",
+              dragOver ? "border-[#6c47ff] bg-[#f8f6ff]" : "border-border bg-[#fafafa] hover:border-[#6c47ff]/40"
+            )}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => onUploadFile(`Document_${Date.now().toString().slice(-4)}.pdf`, "1.2 MB")}
+          >
+            <Upload size={28} className="mx-auto mb-3 text-muted-foreground" />
+            <p className="text-[13px] text-foreground font-medium">Drag & drop files here, or click to upload</p>
+            <p className="text-[11px] text-muted-foreground mt-1.5">Supports PDF, PPTX, DOCX, TXT, CSV, XLS</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <label className="text-[12px] font-medium text-foreground mb-1 block">Title</label>
+              <Input
+                placeholder="e.g., Return Policy SOP"
+                value={manualTitle}
+                onChange={(e) => setManualTitle(e.target.value)}
+                className="text-[13px]"
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-medium text-foreground mb-1 block">Content</label>
+              <Textarea
+                placeholder="Paste your support policy, FAQ, or rule content here..."
+                value={manualContent}
+                onChange={(e) => setManualContent(e.target.value)}
+                className="text-[13px] min-h-[160px] resize-none"
+              />
+            </div>
+          </div>
+        )}
+
+        {tab === "manual" && (
+          <DialogFooter>
+            <Button variant="outline" className="text-[12px]" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button className="text-[12px] bg-[#6c47ff] hover:bg-[#5a3ad9] text-white" onClick={handleManualSubmit}>
+              Submit
+            </Button>
+          </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
