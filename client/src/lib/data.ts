@@ -194,7 +194,7 @@ export interface Topic {
   id: string;
   type: "proposal" | "question" | "document-parse";
   badge: string;
-  confidence?: "High" | "Medium" | "Low";
+
   title: string;
   summary: string;
   ruleContent?: string;
@@ -896,27 +896,17 @@ export const topics: Topic[] = [
     id: "topic-1",
     type: "proposal",
     badge: "NEW RULE",
-    confidence: "High",
     title: "International Returns — Customs Duty Refund",
     summary: "18 tickets about international customs duties were escalated this week. Customers are confused about whether customs duties are refundable. Recommend adding a rule to handle this automatically.",
     ruleContent: "When a customer asks about customs duty refund for international returns:\n1. Inform customer that customs duties are non-refundable by the retailer\n2. Advise customer to contact their local customs office for duty reclaim\n3. Process the product refund as normal\n4. If customer insists on full refund including duties, escalate to L2",
     sourceTickets: ["TK-4891", "TK-4892", "TK-4893"],
     status: "pending",
   },
-  {
-    id: "topic-2",
-    type: "question",
-    badge: "QUESTION",
-    title: "Gift card refund policy unclear",
-    summary: "I've encountered 5 tickets where customers want refunds on gift card purchases. Your current SOP doesn't cover this scenario. How should I handle gift card refund requests?",
-    sourceTickets: ["TK-4894", "TK-4895"],
-    status: "pending",
-  },
+
   {
     id: "topic-3",
     type: "proposal",
     badge: "RULE UPDATE",
-    confidence: "Medium",
     title: "Extend return window for VIP customers",
     summary: "VIP customers have a 15% higher return rate but 40% higher LTV. Extending their return window from 30 to 45 days could improve satisfaction without significant cost impact.",
     ruleContent: "Update VIP Customer Handling rule:\n- Extend return window from 30 days to 45 days for VIP customers\n- Apply to customers tagged VIP, or with 5+ orders, or LTV > $500",
