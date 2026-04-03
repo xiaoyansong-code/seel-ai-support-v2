@@ -428,12 +428,7 @@ function ConfigureAgentSection() {
             {hiredRepName || agent.name}
           </button>
         ))}
-        <button
-          onClick={() => toast.info("Add Agent — Create additional AI Reps with different configurations. Coming in the next release.")}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-dashed border-gray-300 text-gray-400 text-sm hover:border-indigo-300 hover:text-indigo-500 transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" /> Add Agent
-        </button>
+
       </div>
 
       {/* ── Identity ── */}

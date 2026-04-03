@@ -898,14 +898,6 @@ function RepView({ agentId }: { agentId: string }) {
         })}
       </div>
 
-      {/* Chat Input — textarea */}
-      <ChatInput
-        value={inputValue}
-        onChange={setInputValue}
-        onSend={handleSendChat}
-        placeholder={`Message ${displayName}...`}
-      />
-
       <AgentProfileSheet
         agent={agent}
         open={profileOpen}
@@ -997,14 +989,7 @@ function NormalView() {
             </button>
           ))}
 
-          {/* Add Agent button */}
-          <button
-            onClick={() => toast.info("Add Agent — Create additional AI Reps with different configurations. Coming in the next release.")}
-            className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400 hover:border-indigo-300 hover:text-indigo-500 transition-colors mt-1"
-            title="Add Agent"
-          >
-            <Plus size={16} />
-          </button>
+
         </div>
 
         {/* Settings button at bottom */}

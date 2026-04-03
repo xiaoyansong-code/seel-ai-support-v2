@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/sheet";
 import {
   Eye, Zap, Lock, Settings, CheckCircle2, XCircle,
-  Bot, Crown,
+  Bot, Crown, Pencil,
 } from "lucide-react";
 
 function AiBadge() {
@@ -33,15 +33,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PermissionRow({ name, system, enabled, locked }: { name: string; system: string; enabled: boolean; locked: boolean }) {
+function PermissionRow({ name, enabled, locked }: { name: string; system?: string; enabled: boolean; locked: boolean }) {
   return (
     <div className="flex items-center justify-between py-2 px-3 border-b border-border/50 last:border-0">
       <div className="flex items-center gap-2">
         <span className="text-[12px] text-foreground">{name}</span>
         {locked && <Lock size={10} className="text-muted-foreground" />}
       </div>
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] text-muted-foreground">{system}</span>
+      <div className="flex items-center gap-1.5">
         {enabled ? (
           <CheckCircle2 size={14} className="text-emerald-500" />
         ) : (
@@ -231,16 +230,17 @@ export default function AgentProfileSheet({
           )}
         </div>
 
-        {/* Edit in Settings footer */}
+        {/* Edit icon in header area */}
         {!agent.isTeamLead && (
-          <div className="px-5 py-3 border-t border-border bg-[#fafafa]">
+          <div className="px-5 py-3 border-t border-border bg-[#fafafa] flex justify-end">
             <Button
-              variant="outline"
-              className="w-full text-[12px] h-9 gap-1.5"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
               onClick={handleEditInSettings}
+              title="Edit in Settings"
             >
-              <Settings size={13} />
-              Edit in Settings
+              <Pencil size={14} />
             </Button>
           </div>
         )}
