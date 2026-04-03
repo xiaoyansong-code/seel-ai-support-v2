@@ -141,6 +141,14 @@ export interface Document {
 }
 
 // --- PERFORMANCE ---
+export interface PerformanceKPI {
+  label: string;
+  value: number;
+  unit: string;
+  trend: number;
+  trendLabel: string;
+}
+
 export interface PerformanceDaily {
   date: string;
   tickets: number;
@@ -149,6 +157,8 @@ export interface PerformanceDaily {
   csat: number;
   firstResponseTime: number;
   fullResolutionTime: number;
+  autoResolutionRate: number;
+  sentimentChangedRate: number;
 }
 
 export interface IntentRow {
@@ -654,22 +664,45 @@ export const escalationFeed: EscalationCard[] = [
 // ============================================================
 // PERFORMANCE DATA
 // ============================================================
-export const performanceDaily: PerformanceDaily[] = [
-  { date: "Mar 18", tickets: 50, resolved: 44, escalated: 6, csat: 4.5, firstResponseTime: 52, fullResolutionTime: 840 },
-  { date: "Mar 19", tickets: 57, resolved: 51, escalated: 6, csat: 4.6, firstResponseTime: 48, fullResolutionTime: 780 },
-  { date: "Mar 20", tickets: 63, resolved: 57, escalated: 6, csat: 4.5, firstResponseTime: 45, fullResolutionTime: 720 },
-  { date: "Mar 21", tickets: 73, resolved: 67, escalated: 6, csat: 4.7, firstResponseTime: 42, fullResolutionTime: 690 },
-  { date: "Mar 22", tickets: 58, resolved: 53, escalated: 5, csat: 4.6, firstResponseTime: 44, fullResolutionTime: 750 },
-  { date: "Mar 23", tickets: 42, resolved: 38, escalated: 4, csat: 4.8, firstResponseTime: 40, fullResolutionTime: 660 },
-  { date: "Mar 24", tickets: 61, resolved: 55, escalated: 6, csat: 4.6, firstResponseTime: 38, fullResolutionTime: 700 },
+export const performanceSummary: PerformanceKPI[] = [
+  { label: "Total Tickets", value: 156, unit: "", trend: 12, trendLabel: "vs previous period" },
+  { label: "Auto-Resolution Rate", value: 68, unit: "%", trend: 4, trendLabel: "vs previous period" },
+  { label: "Escalation Rate", value: 32, unit: "%", trend: -4, trendLabel: "vs previous period" },
+  { label: "Sentiment Improvement", value: 8.3, unit: "%", trend: -1.1, trendLabel: "vs previous period" },
+  { label: "Full Resolution Time", value: 750, unit: "s", trend: -130, trendLabel: "vs previous period" },
 ];
 
+export const performanceDaily: PerformanceDaily[] = Array.from({ length: 30 }, (_, i) => {
+  const d = new Date(2026, 2, i + 1);
+  const dayOfWeek = d.getDay();
+  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+  const baseVolume = isWeekend ? 35 : 60;
+  const growthFactor = 1 + (i / 30) * 0.15;
+  const tickets = Math.round(baseVolume * growthFactor + (Math.random() * 10 - 5));
+  const resRate = Math.min(75, 55 + i * 0.5 + (Math.random() * 6 - 3));
+  const resolved = Math.round(tickets * resRate / 100);
+  return {
+    date: d.toISOString().split("T")[0],
+    tickets,
+    resolved,
+    escalated: tickets - resolved,
+    autoResolutionRate: Math.round(resRate * 10) / 10,
+    csat: Math.round(Math.min(4.8, 3.9 + i * 0.015 + (Math.random() * 0.3 - 0.15)) * 10) / 10,
+    sentimentChangedRate: Math.round(Math.max(3, 15 - i * 0.25 + (Math.random() * 4 - 2)) * 10) / 10,
+    firstResponseTime: Math.round(Math.max(30, 90 - i * 1.5 + (Math.random() * 15 - 7))),
+    fullResolutionTime: Math.round(Math.max(300, 1200 - i * 20 + (Math.random() * 200 - 100))),
+  };
+});
+
 export const intentData: IntentRow[] = [
-  { intent: "WISMO", volume: 156, resolutionRate: 97, csat: 4.8 },
-  { intent: "Refund", volume: 98, resolutionRate: 88, csat: 4.5 },
-  { intent: "Cancellation", volume: 72, resolutionRate: 92, csat: 4.6 },
-  { intent: "Address Change", volume: 45, resolutionRate: 95, csat: 4.7 },
-  { intent: "Complaint", volume: 33, resolutionRate: 62, csat: 4.2 },
+  { intent: "Where Is My Order", volume: 156, resolutionRate: 89, csat: 4.5 },
+  { intent: "Refunds", volume: 98, resolutionRate: 62, csat: 4.0 },
+  { intent: "Cancellations", volume: 67, resolutionRate: 78, csat: 4.2 },
+  { intent: "Product Issues", volume: 52, resolutionRate: 55, csat: 3.8 },
+  { intent: "Shipping", volume: 45, resolutionRate: 71, csat: 4.1 },
+  { intent: "Returns", volume: 38, resolutionRate: 58, csat: 3.9 },
+  { intent: "Pre-sale Questions", volume: 31, resolutionRate: 82, csat: 4.4 },
+  { intent: "Account Issues", volume: 18, resolutionRate: 44, csat: 3.6 },
 ];
 
 // ============================================================

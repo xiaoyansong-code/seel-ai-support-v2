@@ -1,49 +1,181 @@
 /*
- * PerformancePage — KPI dashboard, intent analysis, conversation logs with reasoning
- * PRD: US4 — Performance monitoring with full dashboard, conversation log, and reasoning trace
+ * PerformancePage — Dashboard + Conversations sub-tabs
+ * PRD: US4 — Performance monitoring with KPI dashboard, trend charts,
+ * intent analysis, and conversation log with reasoning detail
+ *
+ * Customizations applied:
+ *   1. 5 KPI cards: Total Tickets, Auto-Resolution Rate, Escalation Rate,
+ *      Sentiment Improvement, Full Resolution Time
+ *   2. 3 Trend Charts: Resolution Rate, CSAT Trend, Full Resolution Time
+ *   3. Consolidated single-row filters
+ *   4. No icons in KPI cards or tab labels
+ *   5. "vs previous period" not "vs previous day"
  */
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
-  performanceDaily, intentData, conversationLogs, dailyDigest,
-  type ConversationLog, type ReasoningTurn
+  performanceSummary, performanceDaily, intentData, conversationLogs,
+  type ConversationLog,
 } from "@/lib/data";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
-  TrendingUp, TrendingDown, Clock, MessageSquare, Zap,
-  ChevronRight, Brain, Search, Shield,
-  Play, CheckCircle, AlertTriangle, XCircle, ArrowRight, BarChart3
-} from "lucide-react";
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { TrendingUp, TrendingDown, ArrowUpDown, Search } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line
+  AreaChart, Area, LineChart, Line,
+  XAxis, YAxis, CartesianGrid,
+  Tooltip as RechartsTooltip, ResponsiveContainer,
 } from "recharts";
+import ConversationLogSidebar from "@/components/ConversationLogSidebar";
 
-type SubTab = "overview" | "conversations";
+type TimeRange = "7d" | "14d" | "30d";
+type SubTab = "dashboard" | "conversations";
+type OutcomeFilter = "all" | "Resolved" | "Escalated" | "Handling";
+type SortField = "ticketId" | "intent" | "sentiment" | "outcome" | "mode" | "turns" | "time";
+type SortDir = "asc" | "desc";
 
+/* ── helpers ── */
+function formatDuration(s: number) {
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return sec > 0 ? `${m}m ${sec}s` : `${m}m`;
+}
+
+function sentimentColor(s: string): string {
+  const map: Record<string, string> = {
+    Positive: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    Neutral: "bg-slate-50 text-slate-600 border-slate-200",
+    Frustrated: "bg-orange-50 text-orange-700 border-orange-200",
+  };
+  return map[s] || "bg-slate-50 text-slate-600 border-slate-200";
+}
+
+function outcomeStyle(o: string): string {
+  if (o === "Resolved") return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (o === "Escalated") return "bg-red-50 text-red-700 border-red-200";
+  return "bg-amber-50 text-amber-700 border-amber-200";
+}
+
+/* ── Mini Bar for Intent table ── */
+function MiniBar({ value, max, color = "bg-blue-500" }: { value: number; max: number; color?: string }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-2 min-w-[100px]">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="text-[11px] text-muted-foreground tabular-nums w-6 text-right">{value}</span>
+    </div>
+  );
+}
+
+function MiniHBar({ value, color = "bg-blue-500" }: { value: number; color?: string }) {
+  return (
+    <div className="flex items-center gap-2 min-w-[100px]">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={cn("h-full rounded-full transition-all", color)} style={{ width: `${value}%` }} />
+      </div>
+      <span className="text-[11px] text-muted-foreground tabular-nums w-10 text-right">{value}%</span>
+    </div>
+  );
+}
+
+/* ── KPI formatting helpers ── */
+function isPositiveTrend(label: string, trend: number) {
+  if (label === "Full Resolution Time" || label === "Sentiment Improvement" || label === "Escalation Rate") return trend < 0;
+  return trend > 0;
+}
+
+function formatKPIValue(label: string, value: number, unit: string) {
+  if (label === "Full Resolution Time") return formatDuration(value);
+  if (unit === "") return String(value);
+  return `${value}${unit}`;
+}
+
+function formatTrend(label: string, trend: number, unit: string) {
+  const sign = trend > 0 ? "+" : "";
+  if (label === "Full Resolution Time") return `${sign}${formatDuration(Math.abs(trend))}`;
+  if (unit === "") return `${sign}${trend}%`;
+  return `${sign}${trend}${unit}`;
+}
+
+/* ── Main Performance Page ── */
 export default function PerformancePage() {
-  const [subTab, setSubTab] = useState<SubTab>("overview");
-  const [selectedConvo, setSelectedConvo] = useState<ConversationLog | null>(null);
+  const [subTab, setSubTab] = useState<SubTab>("dashboard");
+  const [timeRange, setTimeRange] = useState<TimeRange>("7d");
+  const [outcomeFilter, setOutcomeFilter] = useState<OutcomeFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortField, setSortField] = useState<SortField>("time");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+
+  const daysMap: Record<TimeRange, number> = { "7d": 7, "14d": 14, "30d": 30 };
+  const visibleMetrics = performanceDaily.slice(-daysMap[timeRange]);
+
+  const chartData = visibleMetrics.map((d) => ({
+    date: new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    resolution: Math.round(d.autoResolutionRate),
+    csat: Number(d.csat.toFixed(1)),
+    fullRT: Math.round(d.fullResolutionTime / 60),
+  }));
+
+  // Filter conversation logs
+  const filteredLogs = useMemo(() => {
+    let logs = [...conversationLogs];
+    if (outcomeFilter !== "all") logs = logs.filter((l) => l.outcome === outcomeFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      logs = logs.filter((l) =>
+        l.ticketId.toLowerCase().includes(q) ||
+        l.customer.toLowerCase().includes(q) ||
+        l.email.toLowerCase().includes(q) ||
+        l.summary.toLowerCase().includes(q)
+      );
+    }
+    logs.sort((a, b) => {
+      let cmp = 0;
+      switch (sortField) {
+        case "ticketId": cmp = a.ticketId.localeCompare(b.ticketId); break;
+        case "intent": cmp = a.intent.localeCompare(b.intent); break;
+        case "sentiment": cmp = a.sentiment.localeCompare(b.sentiment); break;
+        case "outcome": cmp = a.outcome.localeCompare(b.outcome); break;
+        case "mode": cmp = a.mode.localeCompare(b.mode); break;
+        case "turns": cmp = a.turns - b.turns; break;
+        case "time": cmp = a.time.localeCompare(b.time); break;
+      }
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return logs;
+  }, [outcomeFilter, searchQuery, sortField, sortDir]);
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortField(field); setSortDir("desc"); }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => (
+    <ArrowUpDown className={cn("w-3 h-3 inline ml-0.5", sortField === field ? "text-foreground" : "text-muted-foreground/30")} />
+  );
+
+  const maxVolume = Math.max(...intentData.map((m) => m.volume));
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
       {/* Sub-tabs */}
       <div className="px-5 py-0 flex items-center gap-1 border-b border-border bg-white">
         <button
-          onClick={() => setSubTab("overview")}
+          onClick={() => setSubTab("dashboard")}
           className={cn(
             "px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors -mb-px",
-            subTab === "overview"
+            subTab === "dashboard"
               ? "border-[#6c47ff] text-[#6c47ff]"
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <span className="flex items-center gap-1.5"><BarChart3 size={14} /> Overview</span>
+          Dashboard
         </button>
         <button
           onClick={() => setSubTab("conversations")}
@@ -54,433 +186,308 @@ export default function PerformancePage() {
               : "border-transparent text-muted-foreground hover:text-foreground"
           )}
         >
-          <span className="flex items-center gap-1.5"><MessageSquare size={14} /> Conversations</span>
+          Conversations
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {subTab === "overview" ? (
-          <OverviewView />
-        ) : (
-          <ConversationsView onSelect={setSelectedConvo} />
-        )}
-      </div>
-
-      {/* Conversation detail sheet */}
-      <Sheet open={!!selectedConvo} onOpenChange={() => setSelectedConvo(null)}>
-        <SheetContent className="w-[560px] sm:max-w-[560px] p-0 overflow-y-auto">
-          {selectedConvo && <ConversationDetail convo={selectedConvo} />}
-        </SheetContent>
-      </Sheet>
-    </div>
-  );
-}
-
-// ============================================================
-// OVERVIEW
-// ============================================================
-function OverviewView() {
-  const d = dailyDigest;
-
-  return (
-    <div className="p-5 space-y-5">
-      {/* Daily Digest Banner */}
-      <div className="bg-gradient-to-r from-[#f8f6ff] to-[#fffbf0] border border-[#e8e0ff] rounded-xl p-5">
-        <div className="flex items-center gap-2 mb-3">
-          <Zap size={16} className="text-[#6c47ff]" />
-          <h3 className="text-[14px] font-semibold">Daily Digest — {d.date}</h3>
-        </div>
-        <div className="grid grid-cols-5 gap-4">
-          <DigestCard label="Total Tickets" value={String(d.totalTickets)} delta={d.deltaTickets} />
-          <DigestCard label="Resolution Rate" value={d.resolutionRate} delta={d.deltaResolution} />
-          <DigestCard label="CSAT Score" value={d.csatScore} delta={d.deltaCsat} />
-          <DigestCard label="Avg Response" value={d.avgResponseTime} delta={d.deltaRt} positive={d.deltaRt.startsWith("-")} />
-          <DigestCard label="Sentiment Changed" value={d.sentimentChangedRate} delta={d.deltaSentiment} positive={d.deltaSentiment.startsWith("-")} />
-        </div>
-      </div>
-
-      {/* Charts row */}
-      <div className="grid grid-cols-2 gap-5">
-        {/* Ticket Volume Chart */}
-        <div className="border border-border rounded-xl p-4 bg-white">
-          <h4 className="text-[13px] font-semibold mb-4">Ticket Volume (7 days)</h4>
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={performanceDaily}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Bar dataKey="resolved" fill="#6c47ff" radius={[4, 4, 0, 0]} name="Resolved" />
-              <Bar dataKey="escalated" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Escalated" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* CSAT Trend */}
-        <div className="border border-border rounded-xl p-4 bg-white">
-          <h4 className="text-[13px] font-semibold mb-4">CSAT Trend (7 days)</h4>
-          <ResponsiveContainer width="100%" height={220}>
-            <LineChart data={performanceDaily}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis domain={[4, 5]} tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
-              <Line type="monotone" dataKey="csat" stroke="#6c47ff" strokeWidth={2} dot={{ r: 4, fill: "#6c47ff" }} name="CSAT" />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Intent Analysis Table */}
-      <div className="border border-border rounded-xl p-4 bg-white">
-        <h4 className="text-[13px] font-semibold mb-4">Intent Analysis</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-2 px-3 font-medium text-muted-foreground text-[12px]">Intent</th>
-                <th className="text-right py-2 px-3 font-medium text-muted-foreground text-[12px]">Volume</th>
-                <th className="text-right py-2 px-3 font-medium text-muted-foreground text-[12px]">Resolution</th>
-                <th className="text-right py-2 px-3 font-medium text-muted-foreground text-[12px]">CSAT</th>
-                <th className="text-right py-2 px-3 font-medium text-muted-foreground text-[12px]">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {intentData.map((row) => (
-                <tr key={row.intent} className="border-b border-border/50 hover:bg-[#fafafa]">
-                  <td className="py-2.5 px-3 font-medium">{row.intent}</td>
-                  <td className="py-2.5 px-3 text-right">{row.volume}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <span className={cn(
-                      row.resolutionRate >= 90 ? "text-green-600" :
-                      row.resolutionRate >= 80 ? "text-amber-600" : "text-red-600"
-                    )}>
-                      {row.resolutionRate}%
-                    </span>
-                  </td>
-                  <td className="py-2.5 px-3 text-right">{row.csat}</td>
-                  <td className="py-2.5 px-3 text-right">
-                    <Badge variant="outline" className={cn(
-                      "text-[10px]",
-                      row.resolutionRate >= 90 ? "border-green-300 text-green-700 bg-green-50" :
-                      row.resolutionRate >= 80 ? "border-amber-300 text-amber-700 bg-amber-50" :
-                      "border-red-300 text-red-700 bg-red-50"
-                    )}>
-                      {row.resolutionRate >= 90 ? "Healthy" : row.resolutionRate >= 80 ? "Monitor" : "Needs Work"}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DigestCard({ label, value, delta, positive }: { label: string; value: string; delta: string; positive?: boolean }) {
-  const isPositive = positive !== undefined ? positive : !delta.startsWith("-");
-  return (
-    <div>
-      <p className="text-[11px] text-muted-foreground mb-1">{label}</p>
-      <p className="text-[18px] font-bold">{value}</p>
-      <p className={cn("text-[11px] flex items-center gap-0.5 mt-0.5", isPositive ? "text-green-600" : "text-red-500")}>
-        {isPositive ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
-        {delta}
-      </p>
-    </div>
-  );
-}
-
-// ============================================================
-// CONVERSATIONS VIEW — with filtering
-// ============================================================
-function ConversationsView({ onSelect }: { onSelect: (c: ConversationLog) => void }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [outcomeFilter, setOutcomeFilter] = useState("all");
-  const [sentimentFilter, setSentimentFilter] = useState("all");
-
-  const filtered = conversationLogs.filter((c) => {
-    const matchesSearch = searchQuery === "" ||
-      c.customer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.ticketId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.summary.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesOutcome = outcomeFilter === "all" || c.outcome === outcomeFilter;
-    const matchesSentiment = sentimentFilter === "all" || c.sentiment === sentimentFilter;
-    return matchesSearch && matchesOutcome && matchesSentiment;
-  });
-
-  return (
-    <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Filters */}
-      <div className="px-5 py-3 flex items-center gap-3 border-b border-border/50">
-        <div className="relative flex-1 max-w-[280px]">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="Search conversations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-8 text-[12px]"
-          />
-        </div>
-        <Select value={outcomeFilter} onValueChange={setOutcomeFilter}>
-          <SelectTrigger className="w-[140px] h-8 text-[12px]">
-            <SelectValue placeholder="Outcome" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Outcomes</SelectItem>
-            <SelectItem value="Resolved">Resolved</SelectItem>
-            <SelectItem value="Escalated">Escalated</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={sentimentFilter} onValueChange={setSentimentFilter}>
-          <SelectTrigger className="w-[140px] h-8 text-[12px]">
-            <SelectValue placeholder="Sentiment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Sentiments</SelectItem>
-            <SelectItem value="Positive">Positive</SelectItem>
-            <SelectItem value="Neutral">Neutral</SelectItem>
-            <SelectItem value="Frustrated">Frustrated</SelectItem>
-          </SelectContent>
-        </Select>
-        <span className="text-[12px] text-muted-foreground ml-auto">{filtered.length} conversations</span>
-      </div>
-
-      {/* List */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-2">
-        {filtered.map((convo) => (
-          <div
-            key={convo.ticketId}
-            className="border border-border rounded-xl p-4 bg-white hover:border-[#6c47ff]/30 transition-colors cursor-pointer"
-            onClick={() => onSelect(convo)}
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[13px] font-semibold">{convo.customer}</span>
-                  <Badge variant="secondary" className="text-[10px]">{convo.ticketId}</Badge>
-                  <Badge variant="outline" className={cn(
-                    "text-[10px]",
-                    convo.outcome === "Resolved" ? "border-green-300 text-green-700 bg-green-50" : "border-amber-300 text-amber-700 bg-amber-50"
-                  )}>
-                    {convo.outcome}
-                  </Badge>
-                  {convo.mode && <Badge variant="outline" className="text-[10px]">{convo.mode}</Badge>}
-                </div>
-                <p className="text-[12px] text-muted-foreground line-clamp-1">{convo.summary}</p>
-                <div className="flex items-center gap-3 mt-2 text-[11px] text-muted-foreground">
-                  <span>Intent: <span className="font-medium text-foreground">{convo.intent}</span></span>
-                  <span>Sentiment: <span className={cn(
-                    "font-medium",
-                    convo.sentiment === "Frustrated" ? "text-red-600" :
-                    convo.sentiment === "Positive" ? "text-green-600" : "text-foreground"
-                  )}>{convo.sentiment}</span></span>
-                  <span>{convo.turns} turns</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[11px] text-muted-foreground">{convo.time}</span>
-                <ChevronRight size={14} className="text-muted-foreground" />
-              </div>
+        <div className="max-w-[1060px] mx-auto px-6 py-6">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h1 className="text-[16px] font-semibold text-foreground">
+                {subTab === "dashboard" ? "Dashboard" : "Conversations"}
+              </h1>
+              <p className="text-[12px] text-muted-foreground mt-0.5">
+                {subTab === "dashboard"
+                  ? "Monitor your AI Rep's performance metrics."
+                  : "Review all AI-handled conversations."}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Time range */}
+              <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+                <SelectTrigger className="h-8 w-[110px] text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7d">Last 7 days</SelectItem>
+                  <SelectItem value="14d">Last 14 days</SelectItem>
+                  <SelectItem value="30d">Last 30 days</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-        ))}
 
-        {filtered.length === 0 && (
-          <div className="text-center py-12">
-            <Search size={32} className="mx-auto text-muted-foreground mb-3" />
-            <p className="text-[14px] font-medium text-muted-foreground">No conversations found</p>
-            <p className="text-[12px] text-muted-foreground mt-1">Try adjusting your filters</p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+          {/* ═══ Dashboard ═══ */}
+          {subTab === "dashboard" && (
+            <>
+              {/* KPI Cards — 5 */}
+              <div className="grid grid-cols-5 gap-3 mb-6">
+                {performanceSummary.map((metric) => {
+                  const positive = isPositiveTrend(metric.label, metric.trend);
+                  return (
+                    <Card key={metric.label} className="overflow-hidden">
+                      <CardContent className="pt-4 pb-3">
+                        <span className="text-[11px] text-muted-foreground font-medium">{metric.label}</span>
+                        <div className="mt-2">
+                          <span className="text-xl font-semibold text-foreground tabular-nums">
+                            {formatKPIValue(metric.label, metric.value, metric.unit)}
+                          </span>
+                        </div>
+                        <div className={cn("flex items-center gap-0.5 mt-1 text-[11px] font-medium", positive ? "text-emerald-600" : "text-red-500")}>
+                          {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          <span>{formatTrend(metric.label, metric.trend, metric.unit)}</span>
+                          <span className="text-muted-foreground font-normal ml-0.5">{metric.trendLabel}</span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
 
-// ============================================================
-// CONVERSATION DETAIL with Reasoning
-// ============================================================
-function ConversationDetail({ convo }: { convo: ConversationLog }) {
-  const [showReasoning, setShowReasoning] = useState(true);
+              {/* Trend Charts — 3 */}
+              <div className="grid grid-cols-3 gap-3 mb-6">
+                {/* Resolution Rate */}
+                <Card>
+                  <CardHeader className="pb-1"><CardTitle className="text-[13px]">Resolution Rate</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-[180px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="gRes" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#10b981" stopOpacity={0.2} />
+                              <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} unit="%" />
+                          <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                          <Area type="monotone" dataKey="resolution" stroke="#10b981" fill="url(#gRes)" strokeWidth={2} name="Resolution %" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
 
-  return (
-    <div className="flex flex-col h-full">
-      <SheetHeader className="px-5 pt-5 pb-0">
-        <div className="flex items-center gap-2 mb-1">
-          <Badge variant="secondary" className="text-[10px]">{convo.ticketId}</Badge>
-          <Badge variant="outline" className={cn(
-            "text-[10px]",
-            convo.outcome === "Resolved" ? "border-green-300 text-green-700 bg-green-50" : "border-amber-300 text-amber-700 bg-amber-50"
-          )}>
-            {convo.outcome}
-          </Badge>
-          {convo.mode && <Badge variant="outline" className="text-[10px]">{convo.mode}</Badge>}
-        </div>
-        <SheetTitle className="text-[15px] font-semibold">{convo.customer}</SheetTitle>
-        <p className="text-[12px] text-muted-foreground mt-1">{convo.summary}</p>
-      </SheetHeader>
+                {/* CSAT Trend */}
+                <Card>
+                  <CardHeader className="pb-1"><CardTitle className="text-[13px]">CSAT Trend</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-[180px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="gCSAT" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                          <YAxis domain={[3, 5]} tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                          <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                          <Area type="monotone" dataKey="csat" stroke="#6366f1" fill="url(#gCSAT)" strokeWidth={2} name="CSAT" />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
 
-      {/* Meta */}
-      <div className="px-5 py-2 flex items-center gap-4 text-[11px] text-muted-foreground">
-        <span>Intent: <span className="font-medium text-foreground">{convo.intent}</span></span>
-        <span>Sentiment: <span className={cn(
-          "font-medium",
-          convo.sentiment === "Frustrated" ? "text-red-600" :
-          convo.sentiment === "Positive" ? "text-green-600" : "text-foreground"
-        )}>{convo.sentiment}</span></span>
-        <span>{convo.turns} turns</span>
-        <span>{convo.time}</span>
-      </div>
+                {/* Full Resolution Time */}
+                <Card>
+                  <CardHeader className="pb-1"><CardTitle className="text-[13px]">Full Resolution Time</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="h-[180px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                          <XAxis dataKey="date" tick={{ fontSize: 9 }} tickLine={false} axisLine={false} />
+                          <YAxis tick={{ fontSize: 9 }} tickLine={false} axisLine={false} unit="m" />
+                          <RechartsTooltip contentStyle={{ fontSize: 11, borderRadius: 8, border: "1px solid #e5e7eb" }} />
+                          <Line type="monotone" dataKey="fullRT" stroke="#f59e0b" strokeWidth={2} dot={false} name="Full Resolution (min)" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-      {/* Toggle */}
-      <div className="px-5 py-2 flex items-center gap-2 border-b border-border">
-        <Button
-          size="sm"
-          variant={showReasoning ? "default" : "outline"}
-          className={cn("text-[12px] h-7", showReasoning && "bg-[#6c47ff] hover:bg-[#5a3ad9]")}
-          onClick={() => setShowReasoning(true)}
-        >
-          <Brain size={12} className="mr-1" /> Reasoning
-        </Button>
-        <Button
-          size="sm"
-          variant={!showReasoning ? "default" : "outline"}
-          className={cn("text-[12px] h-7", !showReasoning && "bg-[#6c47ff] hover:bg-[#5a3ad9]")}
-          onClick={() => setShowReasoning(false)}
-        >
-          <MessageSquare size={12} className="mr-1" /> Thread
-        </Button>
-      </div>
+              {/* Intent Table */}
+              <Card className="mb-6">
+                <CardHeader className="pb-2"><CardTitle className="text-[13px]">Performance by Intent</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Intent</th>
+                          <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Volume</th>
+                          <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Resolution Rate</th>
+                          <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">CSAT</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {intentData.filter((m) => m.volume > 0).map((intent) => {
+                          const highlight = intent.volume > 40 && intent.resolutionRate < 60;
+                          return (
+                            <tr key={intent.intent} className={cn("border-b border-border/30 hover:bg-muted/20 transition-colors", highlight && "bg-amber-50/40")}>
+                              <td className="py-2.5 px-3 font-medium">{intent.intent}</td>
+                              <td className="py-2.5 px-3"><MiniBar value={intent.volume} max={maxVolume} color="bg-blue-400" /></td>
+                              <td className="py-2.5 px-3">
+                                <MiniHBar
+                                  value={intent.resolutionRate}
+                                  color={intent.resolutionRate >= 70 ? "bg-emerald-400" : intent.resolutionRate >= 50 ? "bg-amber-400" : "bg-red-400"}
+                                />
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {intent.csat > 0 ? (
+                                  <span className={cn("text-[12px] font-medium", intent.csat >= 4.2 ? "text-emerald-600" : intent.csat >= 3.8 ? "text-amber-600" : "text-red-500")}>
+                                    {intent.csat}/5
+                                  </span>
+                                ) : <span className="text-muted-foreground">—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
-        {showReasoning ? (
-          <div className="space-y-5">
-            {convo.reasoning.map((turn) => (
-              <ReasoningTurnView key={turn.turn} turn={turn} />
-            ))}
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {convo.thread.map((msg, i) => (
-              <ThreadMessageView key={i} msg={msg} />
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+          {/* ═══ Conversations Sub-Tab ═══ */}
+          {subTab === "conversations" && (
+            <>
+              {/* Filters — single row */}
+              <div className="flex items-center gap-3 flex-wrap mb-4">
+                <div className="flex gap-1 bg-muted/50 rounded-lg p-0.5">
+                  {(["all", "Resolved", "Escalated", "Handling"] as OutcomeFilter[]).map((o) => (
+                    <button
+                      key={o}
+                      onClick={() => setOutcomeFilter(o)}
+                      className={cn(
+                        "px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors capitalize",
+                        outcomeFilter === o
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                    >
+                      {o === "all" ? "All" : o}
+                    </button>
+                  ))}
+                </div>
+                <div className="relative flex-1 max-w-xs">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <input
+                    type="text"
+                    placeholder="Search ticket ID, email, summary..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-border/50 bg-muted/20 text-[11px] placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                  />
+                </div>
+                <span className="text-[11px] text-muted-foreground ml-auto">{filteredLogs.length} conversations</span>
+              </div>
 
-function ReasoningTurnView({ turn }: { turn: ReasoningTurn }) {
-  return (
-    <div className="space-y-3">
-      <h4 className="text-[12px] font-semibold text-muted-foreground">Turn {turn.turn}</h4>
-
-      {/* Customer input */}
-      <div className="bg-[#f8f8f8] rounded-lg p-3">
-        <p className="text-[11px] font-semibold text-muted-foreground mb-1">Customer Input</p>
-        <p className="text-[12px] italic">"{turn.customerInput}"</p>
-      </div>
-
-      {/* Context Enrichment */}
-      <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <Search size={12} className="text-blue-600" />
-          <p className="text-[11px] font-semibold text-blue-700">Context Enrichment</p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {turn.contextEnrichment.map((item, i) => (
-            <Badge key={i} variant="secondary" className="text-[10px] bg-blue-100 text-blue-700 border-0">{item}</Badge>
-          ))}
-        </div>
-      </div>
-
-      {/* Rule Routing */}
-      <div className="bg-purple-50/50 border border-purple-100 rounded-lg p-3">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <ArrowRight size={12} className="text-purple-600" />
-          <p className="text-[11px] font-semibold text-purple-700">Rule Routing</p>
-        </div>
-        <p className="text-[12px]">
-          Intent: <span className="font-semibold">{turn.ruleRouting.intent}</span>
-          <span className="text-muted-foreground ml-2">(confidence: {(turn.ruleRouting.confidence * 100).toFixed(0)}%)</span>
-        </p>
-        <div className="flex flex-wrap gap-1.5 mt-1">
-          {turn.ruleRouting.matchedRules.map((rule, i) => (
-            <Badge key={i} variant="secondary" className="text-[10px] bg-purple-100 text-purple-700 border-0">{rule}</Badge>
-          ))}
-        </div>
-      </div>
-
-      {/* Actions Executed */}
-      <div className="bg-green-50/50 border border-green-100 rounded-lg p-3">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <Play size={12} className="text-green-600" />
-          <p className="text-[11px] font-semibold text-green-700">Actions Executed</p>
-        </div>
-        <div className="space-y-1.5">
-          {turn.actionsExecuted.map((action, i) => (
-            <div key={i} className="flex items-center gap-2 text-[12px]">
-              {action.status === "Success" ? (
-                <CheckCircle size={12} className="text-green-600 shrink-0" />
+              {/* Horizontal Table */}
+              {filteredLogs.length > 0 ? (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr className="border-b bg-muted/20">
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("ticketId")}>
+                              Ticket <SortIcon field="ticketId" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                              Customer
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("intent")}>
+                              Intent <SortIcon field="intent" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("sentiment")}>
+                              Sentiment <SortIcon field="sentiment" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("outcome")}>
+                              Outcome <SortIcon field="outcome" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("mode")}>
+                              Mode <SortIcon field="mode" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("turns")}>
+                              Turns <SortIcon field="turns" />
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider whitespace-nowrap">
+                              Summary
+                            </th>
+                            <th className="text-left py-2.5 px-3 text-[10px] font-medium text-muted-foreground uppercase tracking-wider cursor-pointer hover:text-foreground whitespace-nowrap" onClick={() => toggleSort("time")}>
+                              Time <SortIcon field="time" />
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredLogs.map((log) => (
+                            <tr
+                              key={log.ticketId}
+                              onClick={() => setSelectedTicketId(log.ticketId)}
+                              className="border-b border-border/30 hover:bg-muted/20 cursor-pointer transition-colors"
+                            >
+                              <td className="py-2.5 px-3 whitespace-nowrap">
+                                <span className="text-primary font-mono text-[11px]">{log.ticketId}</span>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <div className="text-[11px]">{log.customer}</div>
+                                <div className="text-[10px] text-muted-foreground">{log.email}</div>
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] whitespace-nowrap">{log.intent}</td>
+                              <td className="py-2.5 px-3">
+                                <Badge variant="outline" className={cn("text-[9px] py-0 h-4", sentimentColor(log.sentiment))}>
+                                  {log.sentiment}
+                                </Badge>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <Badge variant="outline" className={cn("text-[9px] py-0 h-4", outcomeStyle(log.outcome))}>
+                                  {log.outcome}
+                                </Badge>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <Badge variant="outline" className="text-[9px] py-0 h-4">{log.mode}</Badge>
+                              </td>
+                              <td className="py-2.5 px-3 text-[11px] text-center tabular-nums">{log.turns}</td>
+                              <td className="py-2.5 px-3 text-[11px] text-muted-foreground max-w-[180px] truncate">{log.summary}</td>
+                              <td className="py-2.5 px-3 text-[11px] text-muted-foreground whitespace-nowrap">{log.time}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
               ) : (
-                <XCircle size={12} className="text-red-500 shrink-0" />
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <p className="text-[12px] text-muted-foreground">No conversations found for the selected filters.</p>
+                  </CardContent>
+                </Card>
               )}
-              <span className="font-mono text-[11px]">{action.name}</span>
-              <span className="text-muted-foreground">→ {action.result}</span>
-            </div>
-          ))}
+            </>
+          )}
+
+          <div className="h-4" />
         </div>
       </div>
 
-      {/* Guardrail Check */}
-      <div className="bg-amber-50/50 border border-amber-100 rounded-lg p-3">
-        <div className="flex items-center gap-1.5 mb-1">
-          <Shield size={12} className="text-amber-600" />
-          <p className="text-[11px] font-semibold text-amber-700">Guardrail Check</p>
-        </div>
-        <p className="text-[12px]">{turn.guardrailCheck}</p>
-      </div>
-
-      <Separator className="my-2" />
-    </div>
-  );
-}
-
-function ThreadMessageView({ msg }: { msg: { from: string; type: string; author: string; text: string; time: string; channel: string } }) {
-  const isSystem = msg.from === "system";
-  const isCustomer = msg.from === "customer";
-  const isInternal = msg.type === "internal-note";
-
-  if (isSystem) {
-    return (
-      <div className="flex items-center gap-2 py-1.5">
-        <div className="flex-1 border-t border-border/50" />
-        <span className="text-[11px] text-muted-foreground shrink-0">{msg.text}</span>
-        <div className="flex-1 border-t border-border/50" />
-      </div>
-    );
-  }
-
-  return (
-    <div className={cn(
-      "rounded-lg p-3 text-[12px]",
-      isInternal ? "bg-amber-50 border border-amber-200" :
-      isCustomer ? "bg-[#f8f8f8] border border-border" :
-      "bg-[#f0edff] border border-[#e0d8ff]"
-    )}>
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="font-semibold text-[12px]">{msg.author}</span>
-        {isInternal && (
-          <Badge variant="outline" className="text-[9px] border-amber-300 text-amber-700">Internal Note</Badge>
-        )}
-        <span className="text-[10px] text-muted-foreground ml-auto">{msg.time} · {msg.channel}</span>
-      </div>
-      <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+      {/* Conversation detail sidebar */}
+      <ConversationLogSidebar
+        ticketId={selectedTicketId}
+        onClose={() => setSelectedTicketId(null)}
+      />
     </div>
   );
 }
