@@ -361,10 +361,8 @@ function RuleDetailSheet({ ruleId, open, onOpenChange, onNavigateToDoc }: { rule
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-[480px] sm:max-w-[480px] p-0 flex flex-col">
         <SheetHeader className="px-5 pt-4 pb-3 border-b border-border">
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">Updated {rule.lastUpdated}</span>
-          </div>
-          <SheetTitle className="text-[16px] mt-1">{rule.name}</SheetTitle>
+          <SheetTitle className="text-[16px]">{rule.name}</SheetTitle>
+          <span className="text-[11px] text-muted-foreground mt-1">Updated {rule.lastUpdated}</span>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-5 py-5 space-y-6">
