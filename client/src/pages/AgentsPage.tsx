@@ -971,18 +971,25 @@ function NormalView() {
           {nonLeadAgents.map((agent) => (
             <button
               key={agent.id}
-              onClick={() => setSelectedAgentId(agent.id)}
+              onClick={() => {
+                if (!setupFullyComplete) {
+                  toast.info("Complete setup first to access your AI Rep.");
+                  return;
+                }
+                setSelectedAgentId(agent.id);
+              }}
               className={cn(
                 "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-bold transition-all relative",
                 selectedAgentId === agent.id && "ring-2 ring-[#6c47ff] ring-offset-2",
+                !setupFullyComplete && "opacity-40 cursor-not-allowed",
               )}
               style={{ background: agent.color }}
-              title={`${hiredRepName || "AI Rep"} (${goLiveMode})`}
+              title={setupFullyComplete ? `${hiredRepName || "AI Rep"} (${goLiveMode})` : "Complete setup first"}
             >
               {hiredRepName ? hiredRepName.slice(0, 2).toUpperCase() : agent.initials}
               <span className={cn(
                 "absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white",
-                modeDotColor
+                !setupFullyComplete ? "bg-gray-400" : modeDotColor
               )} />
             </button>
           ))}
