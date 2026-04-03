@@ -202,6 +202,7 @@ export interface Topic {
   currentRuleContent?: string;
   newRuleContent?: string;
   sourceTickets: string[];
+  sourceDocId?: string;
   status: "pending" | "accepted" | "rejected" | "revised";
 }
 
@@ -907,6 +908,7 @@ export const topics: Topic[] = [
     summary: "18 tickets about international customs duties were escalated this week. Customers are confused about whether customs duties are refundable. Recommend adding a rule to handle this automatically.",
     ruleContent: "When a customer asks about customs duty refund for international returns:\n1. Inform customer that customs duties are non-refundable by the retailer\n2. Advise customer to contact their local customs office for duty reclaim\n3. Process the product refund as normal\n4. If customer insists on full refund including duties, escalate to L2",
     sourceTickets: ["TK-4891", "TK-4892", "TK-4893"],
+    sourceDocId: "doc-3",
     status: "pending",
   },
 

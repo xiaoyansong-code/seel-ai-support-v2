@@ -84,9 +84,9 @@ function RulesView({ onSwitchToDocuments }: { onSwitchToDocuments: () => void })
     r.content.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Setup-stage proposals: only show when setup is NOT complete
+  // Setup-stage proposals: only show NEW RULE (not RULE UPDATE) when setup is NOT complete
   const pendingTopics = !setupFullyComplete
-    ? topicsData.filter((t) => t.status === "pending")
+    ? topicsData.filter((t) => t.status === "pending" && t.badge === "NEW RULE")
     : [];
 
   return (
@@ -180,9 +180,11 @@ function PlaybookProposalCard({ topic, onAccept, onReject, onTicketClick }: {
   onReject: () => void;
   onTicketClick: (ticketId: string) => void;
 }) {
+  const { docsData } = useApp();
   const [ruleExpanded, setRuleExpanded] = useState(false);
   const [newRuleExpanded, setNewRuleExpanded] = useState(false);
   const isUpdate = !!topic.currentRuleContent;
+  const sourceDoc = topic.sourceDocId ? docsData.find(d => d.id === topic.sourceDocId) : null;
 
   return (
     <div className="bg-white border border-border rounded-xl overflow-hidden">
@@ -254,8 +256,14 @@ function PlaybookProposalCard({ topic, onAccept, onReject, onTicketClick }: {
           </div>
         )}
 
-        {/* Source tickets */}
-        {topic.sourceTickets.length > 0 && (
+        {/* Source — document for NEW RULE, tickets for RULE UPDATE (Team Lead) */}
+        {sourceDoc ? (
+          <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-3">
+            <FileText size={10} className="text-muted-foreground/60" />
+            <span>Source:</span>
+            <span className="text-foreground font-medium">{sourceDoc.name}</span>
+          </div>
+        ) : topic.sourceTickets.length > 0 && (
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-3 flex-wrap">
             <span>Source: {topic.sourceTickets.length} tickets</span>
             <span>&middot;</span>
