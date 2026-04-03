@@ -93,24 +93,26 @@ function RulesView() {
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Header */}
       <div className="px-5 py-3 flex items-center justify-between">
-        <div>
-          <h3 className="text-[14px] font-semibold text-foreground">{rulesData.length} Rules</h3>
-        </div>
-        <div className="relative">
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <div className="relative flex-1 max-w-[260px]">
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
           <Input
             placeholder="Search rules..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 w-[200px] pl-8 text-[12px]"
+            className="h-8 pl-8 text-[12px]"
           />
         </div>
+        <span className="text-[12px] text-muted-foreground">{rulesData.length} rules</span>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-4">
         {/* Setup-stage Proposal Cards (same style as AgentsPage ProposalCard) */}
         {pendingTopics.length > 0 && (
           <div className="space-y-3">
+            <div className="flex items-center gap-2 px-1">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" />
+              <p className="text-[12px] text-muted-foreground">{pendingTopics.length} proposal{pendingTopics.length > 1 ? "s" : ""} need your review</p>
+            </div>
             {pendingTopics.map((topic) => (
               <PlaybookProposalCard
                 key={topic.id}
@@ -123,20 +125,19 @@ function RulesView() {
           </div>
         )}
 
-        {/* Simplified Rule cards */}
-        <div className="space-y-1">
-          {filteredRules.map((rule, index) => (
+        {/* Simplified Rule cards — compact single card with dividers */}
+        <div className="border border-border rounded-xl bg-white overflow-hidden divide-y divide-border/60">
+          {filteredRules.map((rule) => (
             <div
               key={rule.id}
               className={cn(
-                "flex items-center gap-3 px-4 py-3 rounded-lg transition-all cursor-pointer group",
+                "flex items-center gap-3 px-4 py-3 transition-all cursor-pointer group",
                 selectedRuleId === rule.id
-                  ? "bg-[#f8f6ff] border border-[#6c47ff]/30"
-                  : "hover:bg-[#f8f8f8] border border-transparent"
+                  ? "bg-[#f8f6ff]"
+                  : "hover:bg-[#f8f8f8]"
               )}
               onClick={() => setSelectedRuleId(rule.id)}
             >
-              <span className="text-[12px] text-muted-foreground w-5 text-right shrink-0">{index + 1}.</span>
               <div className="flex-1 min-w-0">
                 <h4 className="text-[13px] font-medium text-foreground">{rule.name}</h4>
                 <p className="text-[12px] text-muted-foreground line-clamp-1 mt-0.5">
@@ -193,9 +194,7 @@ function PlaybookProposalCard({ topic, onAccept, onReject, onTicketClick }: {
       </div>
 
       {/* Body */}
-      <div className="px-4 pb-4 pt-0 border-t border-border/50">
-        <p className="text-[12px] text-muted-foreground leading-relaxed mt-3 mb-3">{topic.summary}</p>
-
+      <div className="px-4 pb-4 pt-3 border-t border-border/50">
         {/* What changed */}
         {topic.ruleContent && isUpdate && (
           <div className="bg-amber-50/80 border border-amber-200 rounded-lg p-3 mb-3 relative overflow-hidden">
@@ -397,7 +396,7 @@ function RuleDetailSheet({ ruleId, open, onOpenChange }: { ruleId: string; open:
           {/* Footer metadata */}
           <div className="flex items-center gap-4 text-[11px] text-muted-foreground pt-4 mt-4 border-t border-border">
             <span className="flex items-center gap-1"><Clock size={10} /> Updated {rule.lastUpdated}</span>
-            <span>Source: {rule.source}</span>
+            <button className="text-[#6c47ff] hover:text-[#5a3ad9] cursor-pointer">Source: {rule.source === "Document" ? "Uploaded document" : rule.source === "Team Lead" ? "Team Lead conversation" : rule.source === "Manager edit" ? "Manager edit" : rule.source}</button>
           </div>
         </div>
       </SheetContent>
